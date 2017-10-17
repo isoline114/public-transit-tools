@@ -1,0 +1,79 @@
+﻿<?xml versionisoline114"1.0" encodingisoline114"utf-8"?>
+<Project ToolsVersionisoline114"4.0" DefaultTargetsisoline114"Build" xmlnsisoline114"http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Conditionisoline114" '$(Configuration)' isoline114isoline114 '' ">Debug</Configuration>
+    <Platform Conditionisoline114" '$(Platform)' isoline114isoline114 '' ">x86</Platform>
+    <ProductVersion>8.0.30703</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{3ABC94D7-DC64-4026-B658-D559E1AC6986}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>GetEIDs</RootNamespace>
+    <AssemblyName>GetEIDs</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <TargetFrameworkProfile>
+    </TargetFrameworkProfile>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Conditionisoline114"'$(Configuration)|$(Platform)' isoline114isoline114 'Debug|AnyCPU'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <CodeAnalysisLogFile>bin\Debug\GetEIDs.exe.CodeAnalysisLog.xml</CodeAnalysisLogFile>
+    <CodeAnalysisUseTypeNameInSuppression>true</CodeAnalysisUseTypeNameInSuppression>
+    <CodeAnalysisModuleSuppressionsFile>GlobalSuppressions.cs</CodeAnalysisModuleSuppressionsFile>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRuleSetDirectories>;C:\Program Files (x86)\Microsoft Visual Studio 10.0\Team Tools\Static Analysis Tools\\Rule Sets</CodeAnalysisRuleSetDirectories>
+    <CodeAnalysisRuleDirectories>;C:\Program Files (x86)\Microsoft Visual Studio 10.0\Team Tools\Static Analysis Tools\FxCop\\Rules</CodeAnalysisRuleDirectories>
+    <CodeAnalysisIgnoreBuiltInRules>true</CodeAnalysisIgnoreBuiltInRules>
+  </PropertyGroup>
+  <PropertyGroup Conditionisoline114"'$(Configuration)|$(Platform)' isoline114isoline114 'Release|AnyCPU'">
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <CodeAnalysisLogFile>bin\Release\GetEIDs.exe.CodeAnalysisLog.xml</CodeAnalysisLogFile>
+    <CodeAnalysisUseTypeNameInSuppression>true</CodeAnalysisUseTypeNameInSuppression>
+    <CodeAnalysisModuleSuppressionsFile>GlobalSuppressions.cs</CodeAnalysisModuleSuppressionsFile>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRuleSetDirectories>;C:\Program Files (x86)\Microsoft Visual Studio 10.0\Team Tools\Static Analysis Tools\\Rule Sets</CodeAnalysisRuleSetDirectories>
+    <CodeAnalysisRuleDirectories>;C:\Program Files (x86)\Microsoft Visual Studio 10.0\Team Tools\Static Analysis Tools\FxCop\\Rules</CodeAnalysisRuleDirectories>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Includeisoline114"ESRI.ArcGIS.Geodatabase, Versionisoline11410.1.0.0, Cultureisoline114neutral, PublicKeyTokenisoline1148fc3cc631e44ad86, processorArchitectureisoline114MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <Private>True</Private>
+    </Reference>
+    <Reference Includeisoline114"ESRI.ArcGIS.System, Versionisoline11410.1.0.0, Cultureisoline114neutral, PublicKeyTokenisoline1148fc3cc631e44ad86, processorArchitectureisoline114MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <Private>True</Private>
+    </Reference>
+    <Reference Includeisoline114"ESRI.ArcGIS.Version, Versionisoline1141.0.0.7, Cultureisoline114neutral, PublicKeyTokenisoline1148fc3cc631e44ad86, processorArchitectureisoline114MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <Private>True</Private>
+    </Reference>
+    <Reference Includeisoline114"System" />
+    <Reference Includeisoline114"System.Data.SQLite">
+      <HintPath>..\..\..\..\..\Program Files (x86)\System.Data.SQLite\2008\bin\System.Data.SQLite.dll</HintPath>
+    </Reference>
+    <Reference Includeisoline114"System.Windows.Forms">
+      <Private>False</Private>
+    </Reference>
+    <Reference Includeisoline114"System.Data" />
+    <Reference Includeisoline114"System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Includeisoline114"LicenseInitializer.cs" />
+    <Compile Includeisoline114"Program.cs" />
+    <Compile Includeisoline114"Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Includeisoline114"app.config" />
+  </ItemGroup>
+  <Import Projectisoline114"$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

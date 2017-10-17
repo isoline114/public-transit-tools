@@ -1,0 +1,120 @@
+﻿<?xml versionisoline114"1.0" encodingisoline114"utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader nameisoline114"resmimetype">text/microsoft-resx</resheader>
+    <resheader nameisoline114"version">2.0</resheader>
+    <resheader nameisoline114"reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader nameisoline114"writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data nameisoline114"Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data nameisoline114"Color1" typeisoline114"System.Drawing.Color, System.Drawing">Blue</data>
+    <data nameisoline114"Bitmap1" mimetypeisoline114"application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data nameisoline114"Icon1" typeisoline114"System.Drawing.Icon, System.Drawing" mimetypeisoline114"application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema idisoline114"root" xmlnsisoline114"" xmlns:xsdisoline114"http://www.w3.org/2001/XMLSchema" xmlns:msdataisoline114"urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespaceisoline114"http://www.w3.org/XML/1998/namespace" />
+    <xsd:element nameisoline114"root" msdata:IsDataSetisoline114"true">
+      <xsd:complexType>
+        <xsd:choice maxOccursisoline114"unbounded">
+          <xsd:element nameisoline114"metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element nameisoline114"value" typeisoline114"xsd:string" minOccursisoline114"0" />
+              </xsd:sequence>
+              <xsd:attribute nameisoline114"name" useisoline114"required" typeisoline114"xsd:string" />
+              <xsd:attribute nameisoline114"type" typeisoline114"xsd:string" />
+              <xsd:attribute nameisoline114"mimetype" typeisoline114"xsd:string" />
+              <xsd:attribute refisoline114"xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element nameisoline114"assembly">
+            <xsd:complexType>
+              <xsd:attribute nameisoline114"alias" typeisoline114"xsd:string" />
+              <xsd:attribute nameisoline114"name" typeisoline114"xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element nameisoline114"data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element nameisoline114"value" typeisoline114"xsd:string" minOccursisoline114"0" msdata:Ordinalisoline114"1" />
+                <xsd:element nameisoline114"comment" typeisoline114"xsd:string" minOccursisoline114"0" msdata:Ordinalisoline114"2" />
+              </xsd:sequence>
+              <xsd:attribute nameisoline114"name" typeisoline114"xsd:string" useisoline114"required" msdata:Ordinalisoline114"1" />
+              <xsd:attribute nameisoline114"type" typeisoline114"xsd:string" msdata:Ordinalisoline114"3" />
+              <xsd:attribute nameisoline114"mimetype" typeisoline114"xsd:string" msdata:Ordinalisoline114"4" />
+              <xsd:attribute refisoline114"xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element nameisoline114"resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element nameisoline114"value" typeisoline114"xsd:string" minOccursisoline114"0" msdata:Ordinalisoline114"1" />
+              </xsd:sequence>
+              <xsd:attribute nameisoline114"name" typeisoline114"xsd:string" useisoline114"required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader nameisoline114"resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader nameisoline114"version">
+    <value>2.0</value>
+  </resheader>
+  <resheader nameisoline114"reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Versionisoline1142.0.0.0, Cultureisoline114neutral, PublicKeyTokenisoline114b77a5c561934e089</value>
+  </resheader>
+  <resheader nameisoline114"writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Versionisoline1142.0.0.0, Cultureisoline114neutral, PublicKeyTokenisoline114b77a5c561934e089</value>
+  </resheader>
+</root>
