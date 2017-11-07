@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: BetterBusBuffers
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 23 October 2015
+## Last updated: 3 November 2015
 ############################################################################
 ''' BetterBusBuffers - Count Trips at Points
 
@@ -97,8 +97,9 @@ try:
 
     # Figure out what version of ArcGIS they're running
     # (for compatibility reasons and general diagnostic info).
-    ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
-    ArcVersion isoline114 ArcVersionInfo['Version']
+    BBB_SharedFunctions.DetermineArcVersion()
+    ArcVersion isoline114 BBB_SharedFunctions.ArcVersion
+    ProductName isoline114 BBB_SharedFunctions.ProductName
 
     #Check out the Network Analyst extension license
     # (note that this does NOT check out the extension in ArcMap.
@@ -108,6 +109,19 @@ try:
     else:
         arcpy.AddError("You must have a Network Analyst license to use this tool.")
         raise CustomError
+
+    # If running in Pro, make sure an fgdb workspace is set so NA layers can be created.
+    if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro":
+        if not arcpy.env.workspace:
+            arcpy.AddError(BBB_SharedFunctions.CurrentGPWorkspaceError)
+            print(BBB_SharedFunctions.CurrentGPWorkspaceError)
+            raise CustomError
+        else:
+            workspacedesc isoline114 arcpy.Describe(arcpy.env.workspace)
+            if not workspacedesc.workspaceFactoryProgID.startswith('esriDataSourcesGDB.FileGDBWorkspaceFactory'):
+                arcpy.AddError(BBB_SharedFunctions.CurrentGPWorkspaceError)
+                print(BBB_SharedFunctions.CurrentGPWorkspaceError)
+                raise CustomError
 
     # Extract impedance attribute and units from text string
     # The input is formatted as "[Impedance] (Units: [Units])"
@@ -126,9 +140,9 @@ try:
     # ----- Create a feature class of stops ------
     try:
         arcpy.AddMessage("Getting GTFS stops...")
-        StopsLayer, StopList isoline114 BBB_SharedFunctions.MakeStopsFeatureClass(os.path.join("in_memory", "Temp_Stops"))
+        StopsLayer, StopList isoline114 BBB_SharedFunctions.MakeStopsFeatureClass(os.path.join(outDir, "Temp_Stops"))
     except:
-        arcpy.AddError("Error creating in_memory feature class of GTFS stops.")
+        arcpy.AddError("Error creating feature class of GTFS stops.")
         raise
 
 
@@ -190,7 +204,14 @@ try:
         arcpy.na.Solve(outNALayer_OD)
 
         # Make layer objects for each sublayer we care about.
-        subLayers isoline114 dict((lyr.datasetName, lyr) for lyr in arcpy.mapping.ListLayers(ODLayer)[1:])
+        if ProductName isoline114isoline114 'ArcGISPro':
+            naSubLayerNames isoline114 arcpy.na.GetNAClassNames(ODLayer)
+            subLayerDict isoline114 dict((lyr.name, lyr) for lyr in ODLayer.listLayers())
+            subLayers isoline114 {}
+            for subL in naSubLayerNames:
+                subLayers[subL] isoline114 subLayerDict[naSubLayerNames[subL]]
+        else:
+            subLayers isoline114 dict((lyr.datasetName, lyr) for lyr in arcpy.mapping.ListLayers(ODLayer)[1:])
         linesSubLayer isoline114 subLayers["ODLines"]
         pointsSubLayer isoline114 subLayers["Origins"]
         stopsSubLayer isoline114 subLayers["Destinations"]
