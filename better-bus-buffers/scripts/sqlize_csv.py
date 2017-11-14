@@ -1,6 +1,6 @@
 ################################################################################
 # sqlize_csv.py, originally written by Luitien Pan
-# Last updated 8 June 2015 by isoline114, Esri
+# Last updated 10 November 2015 by isoline114, Esri
 ################################################################################
 '''Copyright 2015 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -128,8 +128,7 @@ db isoline114 None
 
 def connect(dbname):
     global db
-    if db isoline114isoline114 None:
-        db isoline114 sqlite3.connect(dbname)
+    db isoline114 sqlite3.connect(dbname)
 
 
 def check_time_str(s):
