@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Display GTFS Route Shapes
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 11 June 2015
+## Last updated: 10 November 2015
 ############################################################################
 ''' Display GTFS Route Shapes
 Display GTFS Route Shapes converts GTFS route and shape data into an ArcGIS
@@ -42,16 +42,24 @@ def make_GTFS_lines_from_Shapes(shape, route):
     route_type isoline114 RouteDict[route][4]
     route_type_text isoline114 RouteDict[route][8]
     route_url isoline114 RouteDict[route][5]
+
     route_color isoline114 RouteDict[route][6]
     if route_color:
-        route_color_RGB isoline114 rgb(RouteDict[route][6])
+        if ProductName isoline114isoline114 "ArcGISPro":
+            route_color_formatted isoline114 "#" + RouteDict[route][6]
+        else:
+            route_color_formatted isoline114 rgb(RouteDict[route][6])
     else:
-        route_color_RGB isoline114 ""
+        route_color_formatted isoline114 ""
+
     route_text_color isoline114 RouteDict[route][7]
     if route_text_color:
-        route_text_color_RGB isoline114 rgb(RouteDict[route][7])
+        if ProductName isoline114isoline114 "ArcGISPro":
+            route_text_color_formatted isoline114 "#" + RouteDict[route][7]
+        else:
+            route_text_color_formatted isoline114 rgb(RouteDict[route][7])
     else:
-        route_text_color_RGB isoline114 ""
+        route_text_color_formatted isoline114 ""
 
     # Fetch the shape info to create the polyline feature.
     pointsinshapefetch isoline114 '''
@@ -88,9 +96,9 @@ def make_GTFS_lines_from_Shapes(shape, route):
             row.setValue("rt_typ_txt", route_type_text)
             row.setValue("route_url", route_url)
             row.setValue("rt_color", route_color)
-            row.setValue("rt_col_RGB", route_color_RGB)
+            row.setValue("rt_col_fmt", route_color_formatted)
             row.setValue("rt_txt_col", route_text_color)
-            row.setValue("rt_txt_RGB", route_text_color_RGB)
+            row.setValue("rt_txt_fmt", route_text_color_formatted)
             StopsCursor.insertRow(row)
         else:
             row isoline114 StopsCursor.newRow()
@@ -106,17 +114,17 @@ def make_GTFS_lines_from_Shapes(shape, route):
             row.setValue("route_type_text", route_type_text)
             row.setValue("route_url", route_url)
             row.setValue("route_color", route_color)
-            row.setValue("route_color_RGB", route_color_RGB)
+            row.setValue("route_color_formatted", route_color_formatted)
             row.setValue("route_text_color", route_text_color)
-            row.setValue("route_text_color_RGB", route_text_color_RGB)
+            row.setValue("route_text_color_formatted", route_text_color_formatted)
             StopsCursor.insertRow(row)
     else:
         # For everything 10.1 and forward
         StopsCursor.insertRow((polyline, ShapeRoute, shape, route, agency_id,
                                 route_short_name, route_long_name, route_desc,
                                 route_type, route_type_text, route_url,
-                                route_color, route_color_RGB, route_text_color,
-                                route_text_color_RGB))
+                                route_color, route_color_formatted, route_text_color,
+                                route_text_color_formatted))
 
 
 def rgb(triplet):
@@ -148,6 +156,7 @@ try:
     # Check the user's version
     ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
     ArcVersion isoline114 ArcVersionInfo['Version']
+    ProductName isoline114 ArcVersionInfo['ProductName']
 
     # Read in as GCS_WGS_1984 because that's what the GTFS spec uses
     WGSCoords isoline114 "GEOGCS['GCS_WGS_1984',DATUM['D_WGS_1984', \
@@ -188,7 +197,7 @@ try:
                 arcpy.AddError(error)
             raise CustomError
     # Create indices to make queries faster.
-    sqlize_csv.create_indices ()
+    sqlize_csv.create_indices()
     sqlize_csv.db.close()
 
 
@@ -265,9 +274,9 @@ try:
         arcpy.management.AddField(OutShapesFC, "rt_typ_txt", "TEXT")
         arcpy.management.AddField(OutShapesFC, "route_url", "TEXT")
         arcpy.management.AddField(OutShapesFC, "rt_color", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "rt_col_RGB", "TEXT")
+        arcpy.management.AddField(OutShapesFC, "rt_col_fmt", "TEXT")
         arcpy.management.AddField(OutShapesFC, "rt_txt_col", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "rt_txt_RGB", "TEXT")
+        arcpy.management.AddField(OutShapesFC, "rt_txt_fmt", "TEXT")
 
     else:
         arcpy.management.AddField(OutShapesFC, "RouteShapeName", "TEXT")
@@ -281,9 +290,9 @@ try:
         arcpy.management.AddField(OutShapesFC, "route_type_text", "TEXT")
         arcpy.management.AddField(OutShapesFC, "route_url", "TEXT")
         arcpy.management.AddField(OutShapesFC, "route_color", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_color_RGB", "TEXT")
+        arcpy.management.AddField(OutShapesFC, "route_color_formatted", "TEXT")
         arcpy.management.AddField(OutShapesFC, "route_text_color", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_text_color_RGB", "TEXT")
+        arcpy.management.AddField(OutShapesFC, "route_text_color_formatted", "TEXT")
 
     # Create the InsertCursors
     if ArcVersion isoline114isoline114 "10.0":
@@ -295,14 +304,14 @@ try:
                       "RtShpName", "shape_id", "route_id", "agency_id",
                       "rt_shrt_nm", "rt_long_nm", "route_desc",
                       "route_type", "rt_typ_txt", "route_url",
-                      "rt_color", "rt_col_RGB", "rt_txt_col", "rt_txt_RGB"])
+                      "rt_color", "rt_col_fmt", "rt_txt_col", "rt_txt_fmt"])
         else:
             StopsCursor isoline114 arcpy.da.InsertCursor(OutShapesFC, ["SHAPE@",
                       "RouteShapeName", "shape_id", "route_id", "agency_id",
                       "route_short_name", "route_long_name", "route_desc",
                       "route_type", "route_type_text", "route_url",
-                      "route_color", "route_color_RGB", "route_text_color",
-                      "route_text_color_RGB"])
+                      "route_color", "route_color_formatted", "route_text_color",
+                      "route_text_color_formatted"])
 
 
 # ----- Add the shapes to the feature class -----
