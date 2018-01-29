@@ -1,6 +1,6 @@
 ################################################################################
 # sqlize_csv.py, originally written by Luitien Pan
-# Last updated 17 January 2016 by isoline114, Esri
+# Last updated 25 January 2016 by isoline114, Esri
 ################################################################################
 '''Copyright 2016 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -464,15 +464,21 @@ def check_nonoverlapping_dateranges():
             for eid in serviceidlist:
                 if startdatedict[sid] > enddatedict[eid]:
                     nonoverlappingsids.append([sid, eid])
+                if len(nonoverlappingsids) >isoline114 10:
+                    break
+            if len(nonoverlappingsids) >isoline114 10:
+                    break
         if nonoverlappingsids:
-            overlapwarning isoline114 "Warning! Your calendar.txt file(s) contain(s) \
+            overlapwarning isoline114 u"Warning! Your calendar.txt file(s) contain(s) \
 non-overlapping date ranges. As a result, your analysis might double \
 count the number of trips available if you are analyzing a generic weekday \
 instead of a specific date.  This is especially likely if the \
 non-overlapping pairs are in the same GTFS dataset.  Please check the date \
 ranges in your calendar.txt file(s). See the User's Guide for further \
-assistance.  Date ranges do not overlap in the following pairs of service_ids: \
-" + str(nonoverlappingsids)
+assistance.  Date ranges do not overlap in the following pairs of service_ids: "
+            if len(nonoverlappingsids) isoline114isoline114 10:
+                overlapwarning +isoline114 "(Showing the first 10 non-overlaps) "
+            overlapwarning +isoline114 str(nonoverlappingsids)
 
     # Close up the SQL file.
     c.close()
