@@ -79,6 +79,13 @@ def RetrieveStatsForStop(stop_id, rtdirtuple):
 try:
     # ------ Get input parameters and set things up. -----
     try:
+        # Figure out what version of ArcGIS they're running
+        BBB_SharedFunctions.DetermineArcVersion()
+        if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
+            arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
+You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
+            raise CustomError
+
         # Stops and Polygons from Step 1 (any number and route combo)
         FCs isoline114 arcpy.GetParameterAsText(0)
         FCList isoline114 FCs.split(";")
@@ -133,9 +140,6 @@ fields %s. Please choose a valid feature class." % (FC, str(RequiredFields)))
             DepOrArr isoline114 "arrival_time"
         elif DepOrArrChoice isoline114isoline114 "Departures":
             DepOrArr isoline114 "departure_time"
-
-        # Figure out what version of ArcGIS they're running
-        BBB_SharedFunctions.DetermineArcVersion()
 
         OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
         arcpy.env.overwriteOutput isoline114 True
