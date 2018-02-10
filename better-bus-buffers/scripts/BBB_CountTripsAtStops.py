@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: BetterBusBuffers - Count Trips at Stops
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 29 September 2015
+## Last updated: 4 February 2016
 ############################################################################
 ''' BetterBusBuffers - Count Trips at Stops
 
@@ -14,7 +14,7 @@ the number of trips per hour and the maximum time between subsequent trips
 during that time window.
 '''
 ################################################################################
-'''Copyright 2015 Esri
+'''Copyright 2016 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -36,6 +36,13 @@ class CustomError(Exception):
 try:
     # ------ Get input parameters and set things up. -----
     try:
+        
+        # Figure out what version of ArcGIS they're running
+        BBB_SharedFunctions.DetermineArcVersion()
+        if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
+            arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
+You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
+            raise CustomError
 
         # Path for output feature class of GTFS stops.
         # Must be a file geodatabase feature class, not a shapefile.
@@ -71,10 +78,6 @@ try:
             DepOrArr isoline114 "arrival_time"
         elif DepOrArrChoice isoline114isoline114 "Departures":
             DepOrArr isoline114 "departure_time"
-
-        # Figure out what version of ArcGIS they're running
-        ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
-        ArcVersion isoline114 ArcVersionInfo['Version']
 
     except:
         arcpy.AddError("Error getting user inputs.")
@@ -121,7 +124,7 @@ try:
         arcpy.AddMessage("Writing output data...")
 
         # Create an update cursor to add numtrips, trips/hr, and maxwaittime to stops
-        if ArcVersion isoline114isoline114 "10.0":
+        if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
             if ".shp" in outStops:
                 ucursor isoline114 arcpy.UpdateCursor(outStops, "", "", "stop_id; NumTrips; TripsPerHr; MaxWaitTm")
                 for row in ucursor:

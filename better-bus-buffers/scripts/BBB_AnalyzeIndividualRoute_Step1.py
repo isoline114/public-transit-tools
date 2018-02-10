@@ -2,7 +2,7 @@
 ## Tool name: BetterBusBuffers - Count Trips for Individual Route
 ## Step 1 - Preprocess Route Buffers
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 29 September 2015
+## Last updated: 5 February 2016
 ############################################################################
 ''' BetterBusBuffers - Count Trips for Individual Route: Step 1 - Preprocess Route Buffers
 
@@ -19,7 +19,7 @@ Step 1 - Preprocess Route Buffers creates the service areas around the stops.
 The trip count information is filled in Step 2.
 '''
 ################################################################################
-'''Copyright 2015 Esri
+'''Copyright 2016 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -46,6 +46,13 @@ conn isoline114 None
 try:
     # ------ Get input parameters and set things up. -----
     try:
+        # Figure out what version of ArcGIS they're running
+        BBB_SharedFunctions.DetermineArcVersion()
+        if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
+            arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
+You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
+            raise CustomError
+        
         #Check out the Network Analyst extension license
         if arcpy.CheckExtension("Network") isoline114isoline114 "Available":
             arcpy.CheckOutExtension("Network")
@@ -86,17 +93,26 @@ try:
         else:
             TrimPolys isoline114 "NO_TRIM_POLYS"
             TrimPolysValue isoline114 ""
-
-        ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
-        ArcVersion isoline114 BBB_SharedFunctions.ArcVersion isoline114 ArcVersionInfo['Version']
-
+        
         OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
         arcpy.env.overwriteOutput isoline114 True
-
         # Source FC names are not prepended to field names.
         arcpy.env.qualifiedFieldNames isoline114 False
 
-    except Exception, err:
+        # If running in Pro, make sure an fgdb workspace is set so NA layers can be created.
+        if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro":
+            if not arcpy.env.workspace:
+                arcpy.AddError(BBB_SharedFunctions.CurrentGPWorkspaceError)
+                print(BBB_SharedFunctions.CurrentGPWorkspaceError)
+                raise CustomError
+            else:
+                workspacedesc isoline114 arcpy.Describe(arcpy.env.workspace)
+                if not workspacedesc.workspaceFactoryProgID.startswith('esriDataSourcesGDB.FileGDBWorkspaceFactory'):
+                    arcpy.AddError(BBB_SharedFunctions.CurrentGPWorkspaceError)
+                    print(BBB_SharedFunctions.CurrentGPWorkspaceError)
+                    raise CustomError
+
+    except:
         arcpy.AddError("Error getting user inputs.")
         raise
 
@@ -136,7 +152,7 @@ try:
         outStopsname isoline114 "Stops_" + route_short_name
         outPolysname isoline114 "Buffers_" + route_short_name
 
-    except Exception, err:
+    except:
         arcpy.AddError("Error determining route_id for analysis.")
         raise
 
@@ -167,7 +183,7 @@ dataset." % RouteText)
         for triproute in triproutelist:
             trip_dir_dict.setdefault(triproute[1], []).append(triproute[0])
 
-    except Exception, err:
+    except:
         arcpy.AddError("Error getting trips associated with route.")
         raise
 
@@ -198,7 +214,7 @@ GTFS direction_id will be appended to the feature class name." % route_short_nam
             outStopsname +isoline114 "_"
             outPolysname +isoline114 "_"
 
-    except Exception, err:
+    except:
         arcpy.AddError("Error getting stops associated with route.")
         raise
 
@@ -223,7 +239,7 @@ GTFS direction_id will be appended to the feature class name." % route_short_nam
             arcpy.management.AddField(outStops, "route_id", "TEXT")
             arcpy.management.AddField(outStops, "direction_id", "TEXT")
             fields isoline114 ["route_id", "direction_id"]
-            if ArcVersion isoline114isoline114 "10.0":
+            if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
                 cursor isoline114 arcpy.UpdateCursor(outStops)
                 for row in cursor:
                     row.setValue("route_id", route_id)
@@ -237,7 +253,7 @@ GTFS direction_id will be appended to the feature class name." % route_short_nam
                         row[1] isoline114 direction
                         cursor.updateRow(row)
 
-    except Exception, err:
+    except:
         arcpy.AddError("Error creating feature class of GTFS stops.")
         raise
 
@@ -267,7 +283,7 @@ GTFS direction_id will be appended to the feature class name." % route_short_nam
             arcpy.management.AddField(outPolysFC, "route_id", "TEXT")
             arcpy.management.AddField(outPolysFC, "direction_id", "TEXT")
             fields isoline114 ["route_id", "direction_id"]
-            if ArcVersion isoline114isoline114 "10.0":
+            if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
                 cursor isoline114 arcpy.UpdateCursor(outPolysFC)
                 for row in cursor:
                     row.setValue("route_id", route_id)
@@ -281,7 +297,7 @@ GTFS direction_id will be appended to the feature class name." % route_short_nam
                         row[1] isoline114 direction
                         cursor.updateRow(row)
 
-    except Exception, err:
+    except:
         arcpy.AddError("Error creating buffers around stops.")
         raise
 
@@ -307,7 +323,7 @@ except CustomError:
     arcpy.AddError("Failed to create buffers around stops for this route.")
     pass
 
-except Exception, err:
+except:
     arcpy.AddError("Failed to create buffers around stops for this route.")
     raise
 

@@ -2,7 +2,7 @@
 ## Tool name: BetterBusBuffers - Count Trips in Polygon Buffers Around Stops
 ## Step 2: Count Trips in Buffers
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 29 September 2015
+## Last updated: 4 February 2016
 ####################################################
 '''BetterBusBuffers - Count Trips in Polygon Buffers Around Stops - Step 2: Count Trips in Buffers
 
@@ -19,7 +19,7 @@ Step 2: Count Trips in Buffers uses the template feature class created in Step
 1 and counts the trips in a specific time window.
 '''
 ################################################################################
-'''Copyright 2015 Esri
+'''Copyright 2016 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -45,6 +45,13 @@ try:
 
     # ----- Set up the run -----
     try:
+        # Figure out what version of ArcGIS they're running
+        BBB_SharedFunctions.DetermineArcVersion()
+        if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
+            arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
+You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
+            raise CustomError
+        
         # Get the files from Step 1 to work with.
         inStep1GDB isoline114 arcpy.GetParameterAsText(0)
         # Step1_GTFS.sql and Step1_FlatPolys must exist in order for the tool to run.
@@ -88,10 +95,6 @@ try:
             DepOrArr isoline114 "departure_time"
         elif TravelFromTo isoline114isoline114 "Arrivals":
             DepOrArr isoline114 "arrival_time"
-
-        # Figure out what version of ArcGIS they're running
-        ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
-        ArcVersion isoline114 ArcVersionInfo['Version']
 
         # It's okay to overwrite stuff.
         OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
@@ -139,7 +142,7 @@ try:
         arcpy.management.CopyFeatures(FlatPolys, outFile)
         badpolys isoline114 []
 
-        if ArcVersion isoline114isoline114 "10.0":
+        if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
             if ".shp" in outFilename:
                 ucursor isoline114 arcpy.UpdateCursor(outFile, "", "",
                                         "PolyID; NumTrips; NumTripsPe; NumStopsIn; MaxWaitTim")
