@@ -67,8 +67,15 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
         outDir isoline114 os.path.dirname(outFile)
         outFilename isoline114 os.path.basename(outFile)
 
-        # Day and time window to analyze
-        DayOfWeek isoline114 arcpy.GetParameterAsText(2)
+        # Weekday or specific date to analyze.
+        # Note: Datetime format check is in tool validation code
+        day isoline114 arcpy.GetParameterAsText(2)
+        if day in BBB_SharedFunctions.days: #Generic weekday
+            Specific isoline114 False
+        else: #Specific date
+            Specific isoline114 True
+            day isoline114 datetime.datetime.strptime(day, '%Y%m%d')
+        
         # Lower end of time window (HH:MM in 24-hour time)
         start_time isoline114 arcpy.GetParameterAsText(3)
         # Default start time is midnight if they leave it blank.
@@ -110,7 +117,7 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
         arcpy.AddMessage("Counting transit trips during the time window...")
 
         # Get a dictionary of stop times in our time window {stop_id: [[trip_id, stop_time]]}
-        stoptimedict isoline114 BBB_SharedFunctions.CountTripsAtStops(DayOfWeek, start_sec, end_sec, DepOrArr)
+        stoptimedict isoline114 BBB_SharedFunctions.CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specific)
 
     except:
         arcpy.AddError("Failed to count transit trips during the time window.")
