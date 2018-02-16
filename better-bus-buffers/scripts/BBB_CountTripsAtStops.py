@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: BetterBusBuffers - Count Trips at Stops
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 4 February 2016
+## Last updated: 8 February 2016
 ############################################################################
 ''' BetterBusBuffers - Count Trips at Stops
 
@@ -52,8 +52,15 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
         SQLDbase isoline114 arcpy.GetParameterAsText(1)
         BBB_SharedFunctions.ConnectToSQLDatabase(SQLDbase)
 
-        # Day and time window to analyze
-        DayOfWeek isoline114 arcpy.GetParameterAsText(2)
+        # Weekday or specific date to analyze.
+        # Note: Datetime format check is in tool validation code
+        day isoline114 arcpy.GetParameterAsText(2)
+        if day in BBB_SharedFunctions.days: #Generic weekday
+            Specific isoline114 False
+        else: #Specific date
+            Specific isoline114 True
+            day isoline114 datetime.datetime.strptime(day, '%Y%m%d')
+            
         # Lower end of time window (HH:MM in 24-hour time)
         start_time isoline114 arcpy.GetParameterAsText(3)
         # Default start time is midnight if they leave it blank.
@@ -112,7 +119,7 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
         arcpy.AddMessage("Calculating the number of transit trips available during the time window...")
 
         # Get a dictionary of {stop_id: [[trip_id, stop_time]]} for our time window
-        stoptimedict isoline114 BBB_SharedFunctions.CountTripsAtStops(DayOfWeek, start_sec, end_sec, DepOrArr)
+        stoptimedict isoline114 BBB_SharedFunctions.CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specific)
 
     except:
         arcpy.AddError("Error counting arrivals or departures at stop during time window.")
