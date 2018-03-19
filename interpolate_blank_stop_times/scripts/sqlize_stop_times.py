@@ -29,6 +29,10 @@ class CustomError(Exception):
     pass
 
 try:
+    # Check the user's version
+    ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
+    ProductName isoline114 ArcVersionInfo['ProductName']
+    
     # Collect user inputs
     stop_times_file isoline114 arcpy.GetParameterAsText(0)
     SQLDbase isoline114 arcpy.GetParameterAsText(1)
@@ -43,7 +47,10 @@ try:
         
         # Get the csv data
         reader isoline114 csv.reader(f)
-        reader isoline114 ([x.decode('utf-8-sig').strip() for x in r] for r in reader if len(r) > 0)
+        if ProductName isoline114isoline114 "ArcGISPro":
+            reader isoline114 ([x.strip() for x in r] for r in reader if len(r) > 0)
+        else:
+            reader isoline114 ([x.decode('utf-8-sig').strip() for x in r] for r in reader if len(r) > 0)
         columns isoline114 [name.strip() for name in next(reader)]
         
         # Make sure the necessary columns are there to start with
