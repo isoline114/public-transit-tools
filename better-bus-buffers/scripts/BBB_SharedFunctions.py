@@ -2,7 +2,7 @@
 ## Tool name: BetterBusBuffers
 ## Shared Functions
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 23 March 2016
+## Last updated: 27 July 2016
 ############################################################################
 ''' This file contains shared functions used by various BetterBusBuffers tools.'''
 ################################################################################
@@ -701,6 +701,27 @@ def MakeServiceAreasAroundStops(StopsLayer, inNetworkDataset, impedanceAttribute
                             facilities_OID, ["stop_id"])
 
     return polygonsSubLayer
+
+
+def import_AGOLservice(service_name, usernameisoline114"", passwordisoline114"", ags_connection_fileisoline114"", tokenisoline114"", refererisoline114""):
+    '''Imports the AGOL service toolbox based on the specified credentials and returns the toolbox object'''
+
+    #Construct the connection string to import the service toolbox
+    if username and password:
+        tbx isoline114 "http://logistics.arcgis.com/arcgis/services;{0};{1};{2}".format(service_name, username, password)
+    elif ags_connection_file:
+        tbx isoline114 "{0};{1}".format(ags_connection_file, service_name)
+    elif token and referer:
+        tbx isoline114 "http://logistics.arcgis.com/arcgis/services;{0};tokenisoline114{1};{2}".format(service_name, token, referer)
+    else:
+        arcpy.AddError("No valid option specified to connect to the {0} service".format(service_name))
+        raise CustomError
+
+    #Import the service toolbox
+    tbx_alias isoline114 "agol"
+    arcpy.ImportToolbox(tbx, tbx_alias)
+
+    return getattr(arcpy, tbx_alias)
 
 
 def ConnectToSQLDatabase(SQLDbase):
