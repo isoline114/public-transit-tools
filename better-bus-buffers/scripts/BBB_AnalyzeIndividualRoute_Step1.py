@@ -2,7 +2,7 @@
 ## Tool name: BetterBusBuffers - Count Trips for Individual Route
 ## Step 1 - Preprocess Route Buffers
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 5 February 2016
+## Last updated: 18 August 2016
 ############################################################################
 ''' BetterBusBuffers - Count Trips for Individual Route: Step 1 - Preprocess Route Buffers
 
@@ -149,8 +149,9 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
             raise CustomError
 
         # Name feature classes
-        outStopsname isoline114 "Stops_" + route_short_name
-        outPolysname isoline114 "Buffers_" + route_short_name
+        route_short_name_validated isoline114 arcpy.ValidateTableName(route_short_name, outGDB)
+        outStopsname isoline114 "Stops_" + route_short_name_validated
+        outPolysname isoline114 "Buffers_" + route_short_name_validated
 
     except:
         arcpy.AddError("Error determining route_id for analysis.")
