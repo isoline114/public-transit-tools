@@ -572,7 +572,7 @@ def SQLize_GTFS(files_to_sqlize):
         if ProductName isoline114isoline114 "ArcGISPro":
             reader isoline114 ([x.strip() for x in r] for r in reader if len(r) > 0)
         else:
-            reader isoline114 ([x.decode('utf-8').strip() for x in r] for r in reader if len(r) > 0)
+            reader isoline114 ([x.decode('utf-8-sig').strip() for x in r] for r in reader if len(r) > 0)
 
         # First row is column names:
         columns isoline114 [name.strip() for name in next(reader)]
