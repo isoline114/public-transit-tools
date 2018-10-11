@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Display GTFS in ArcGIS
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 12 May 2016
+## Last updated: 6 October 2016
 ############################################################################
 ''' Display GTFS Route Shapes
 Display GTFS Route Shapes converts GTFS route and shape data into an ArcGIS
@@ -28,37 +28,53 @@ class CustomError(Exception):
     pass
 
 
-def make_GTFS_lines_from_Shapes(shape, route):
+def make_GTFS_lines_from_Shapes(shape, routeisoline114None):
 
-    # Retrieve route info for final output file.
-    ShapeRoute isoline114 shape + "_" + route
-    agency_id isoline114 RouteDict[route][0]
-    route_short_name isoline114 RouteDict[route][1]
-    route_long_name isoline114 RouteDict[route][2]
-    if RouteDict[route][3]:
-        route_desc isoline114 RouteDict[route][3][:max_route_desc_length]
+    if route:
+        # Retrieve route info for final output file.
+        ShapeRoute isoline114 shape + "_" + route
+        agency_id isoline114 RouteDict[route][0]
+        route_short_name isoline114 RouteDict[route][1]
+        route_long_name isoline114 RouteDict[route][2]
+        if RouteDict[route][3]:
+            route_desc isoline114 RouteDict[route][3][:max_route_desc_length]
+        else:
+            route_desc isoline114 ""
+        route_type isoline114 RouteDict[route][4]
+        route_type_text isoline114 RouteDict[route][8]
+        route_url isoline114 RouteDict[route][5]
+    
+        route_color isoline114 RouteDict[route][6]
+        if route_color:
+            if ProductName isoline114isoline114 "ArcGISPro":
+                route_color_formatted isoline114 "#" + RouteDict[route][6]
+            else:
+                route_color_formatted isoline114 rgb(RouteDict[route][6])
+        else:
+            route_color_formatted isoline114 ""
+    
+        route_text_color isoline114 RouteDict[route][7]
+        if route_text_color:
+            if ProductName isoline114isoline114 "ArcGISPro":
+                route_text_color_formatted isoline114 "#" + RouteDict[route][7]
+            else:
+                route_text_color_formatted isoline114 rgb(RouteDict[route][7])
+        else:
+            route_text_color_formatted isoline114 ""
+
     else:
+        # Couldn't get route info for this shape
+        ShapeRoute isoline114 shape
+        agency_id isoline114 ""
+        route_short_name isoline114 ""
+        route_long_name isoline114 ""
         route_desc isoline114 ""
-    route_type isoline114 RouteDict[route][4]
-    route_type_text isoline114 RouteDict[route][8]
-    route_url isoline114 RouteDict[route][5]
-
-    route_color isoline114 RouteDict[route][6]
-    if route_color:
-        if ProductName isoline114isoline114 "ArcGISPro":
-            route_color_formatted isoline114 "#" + RouteDict[route][6]
-        else:
-            route_color_formatted isoline114 rgb(RouteDict[route][6])
-    else:
+        route_type isoline114 0
+        route_type_text isoline114 ""
+        route_url isoline114 ""
+        route_color isoline114 ""
         route_color_formatted isoline114 ""
-
-    route_text_color isoline114 RouteDict[route][7]
-    if route_text_color:
-        if ProductName isoline114isoline114 "ArcGISPro":
-            route_text_color_formatted isoline114 "#" + RouteDict[route][7]
-        else:
-            route_text_color_formatted isoline114 rgb(RouteDict[route][7])
-    else:
+        route_text_color isoline114 ""
         route_text_color_formatted isoline114 ""
 
     # Fetch the shape info to create the polyline feature.
@@ -199,60 +215,68 @@ try:
     # Create indices to make queries faster.
     sqlize_csv.create_indices()
     sqlize_csv.db.close()
-
-
-# ----- Make dictionary of route info -----
-
-    arcpy.AddMessage("Collecting Route info...")
-
-    # GTFS route_type information
-    ##0 - Tram, Streetcar, Light rail. Any light rail or street level system within a metropolitan area.
-    ##1 - Subway, Metro. Any underground rail system within a metropolitan area.
-    ##2 - Rail. Used for intercity or long-distance travel.
-    ##3 - Bus. Used for short- and long-distance bus routes.
-    ##4 - Ferry. Used for short- and long-distance boat service.
-    ##5 - Cable car. Used for street-level cable cars where the cable runs beneath the car.
-    ##6 - Gondola, Suspended cable car. Typically used for aerial cable cars where the car is suspended from the cable.
-    ##7 - Funicular. Any rail system designed for steep inclines.
-    route_type_dict isoline114 {0: "Tram, Streetcar, Light rail",
-                        1: "Subway, Metro",
-                        2: "Rail",
-                        3: "Bus",
-                        4: "Ferry",
-                        5: "Cable car",
-                        6: "Gondola, Suspended cable car",
-                        7: "Funicular"}
-
+    
     # Connect to the SQL database
     conn isoline114 sqlite3.connect(SQLDbase)
     c isoline114 conn.cursor()
 
-    # Find all routes and associated info.
+
+# ----- Make dictionary of route info -----
+
     RouteDict isoline114 {}
-    routesfetch isoline114 '''
-        SELECT route_id, agency_id, route_short_name, route_long_name,
-        route_desc, route_type, route_url, route_color, route_text_color
-        FROM routes
-        ;'''
-    c.execute(routesfetch)
-    routelist isoline114 c.fetchall()
-    for routeitem in routelist:
-        # Convert from a tuple to a list so the .shp logic below doesn't mess up
-        route isoline114 list(routeitem)
-        # {route_id: [all route.txt fields + route_type_text]}
-        try:
-            route_type_text isoline114 route_type_dict[int(route[5])]
-        except:
-            route_type_text isoline114 ""
-        # Shapefile output can't handle null values, so make them empty strings.
-        if ".shp" in OutShapesFCname:
-            possiblenulls isoline114 [1, 4, 6, 7, 8]
-            for idx in possiblenulls:
-                if not route[idx]:
-                    route[idx] isoline114 ""
-        RouteDict[route[0]] isoline114 [route[1], route[2], route[3], route[4], route[5],
-                                 route[6], route[7], route[8],
-                                 route_type_text]
+
+    if not sqlize_csv.populate_route_info:
+        arcpy.AddWarning("Your GTFS trips.txt file does not have a shape_id column. \
+This tool can still draw the route shapes in the map, but it will not be able to populate \
+the output feature class's attribute table with route information.")
+
+    else: # Only do this if it's possible to populate the route info
+
+        arcpy.AddMessage("Collecting Route info...")
+    
+        # GTFS route_type information
+        ##0 - Tram, Streetcar, Light rail. Any light rail or street level system within a metropolitan area.
+        ##1 - Subway, Metro. Any underground rail system within a metropolitan area.
+        ##2 - Rail. Used for intercity or long-distance travel.
+        ##3 - Bus. Used for short- and long-distance bus routes.
+        ##4 - Ferry. Used for short- and long-distance boat service.
+        ##5 - Cable car. Used for street-level cable cars where the cable runs beneath the car.
+        ##6 - Gondola, Suspended cable car. Typically used for aerial cable cars where the car is suspended from the cable.
+        ##7 - Funicular. Any rail system designed for steep inclines.
+        route_type_dict isoline114 {0: "Tram, Streetcar, Light rail",
+                            1: "Subway, Metro",
+                            2: "Rail",
+                            3: "Bus",
+                            4: "Ferry",
+                            5: "Cable car",
+                            6: "Gondola, Suspended cable car",
+                            7: "Funicular"}
+    
+        # Find all routes and associated info.
+        routesfetch isoline114 '''
+            SELECT route_id, agency_id, route_short_name, route_long_name,
+            route_desc, route_type, route_url, route_color, route_text_color
+            FROM routes
+            ;'''
+        c.execute(routesfetch)
+        routelist isoline114 c.fetchall()
+        for routeitem in routelist:
+            # Convert from a tuple to a list so the .shp logic below doesn't mess up
+            route isoline114 list(routeitem)
+            # {route_id: [all route.txt fields + route_type_text]}
+            try:
+                route_type_text isoline114 route_type_dict[int(route[5])]
+            except:
+                route_type_text isoline114 ""
+            # Shapefile output can't handle null values, so make them empty strings.
+            if ".shp" in OutShapesFCname:
+                possiblenulls isoline114 [1, 4, 6, 7, 8]
+                for idx in possiblenulls:
+                    if not route[idx]:
+                        route[idx] isoline114 ""
+            RouteDict[route[0]] isoline114 [route[1], route[2], route[3], route[4], route[5],
+                                     route[6], route[7], route[8],
+                                     route_type_text]
 
 
 # ----- Create output feature class and prepare InsertCursor -----
@@ -326,16 +350,31 @@ try:
     shapeslist isoline114 c.fetchall()
 
     # Actually add the shapes to the feature class
+    unused_shapes isoline114 False
     for shape in shapeslist:
-        # Get the route ids that have this shape.
-        # There should probably be a 1-1 relationship, but not sure.
-        shapesroutesfetch isoline114 '''
-            SELECT DISTINCT route_id FROM trips WHERE shape_idisoline114'%s'
-            ;''' % shape[0]
-        c.execute(shapesroutesfetch)
-        shapesroutes isoline114 c.fetchall()
-        for route in shapesroutes:
-            make_GTFS_lines_from_Shapes(shape[0], route[0])
+        if not sqlize_csv.populate_route_info:
+            # Don't worry about populating route info
+            make_GTFS_lines_from_Shapes(shape[0])
+        else:
+            # Get the route ids that have this shape.
+            # There should probably be a 1-1 relationship, but not sure.
+            shapesroutesfetch isoline114 '''
+                SELECT DISTINCT route_id FROM trips WHERE shape_idisoline114'%s'
+                ;''' % shape[0]
+            c.execute(shapesroutesfetch)
+            shapesroutes isoline114 c.fetchall()
+            if len(shapesroutes) isoline114isoline114 0:
+                # No trips actually use this shape, so skip adding route info
+                make_GTFS_lines_from_Shapes(shape[0])
+                unused_shapes isoline114 True
+            else:
+                for route in shapesroutes:
+                    make_GTFS_lines_from_Shapes(shape[0], route[0])
+
+    if unused_shapes:
+        arcpy.AddWarning("One or more of the shapes in your GTFS shapes.txt file are not used by any \
+trips in your trips.txt file.  These shapes were included in the output from this tool, but route \
+information was not populated.")
 
     # Clean up. Delete the cursor.
     del StopsCursor

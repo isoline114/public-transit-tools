@@ -1,6 +1,6 @@
 ################################################################################
 # sqlize_csv.py, originally written by Luitien Pan
-# Last updated 17 January 2016 by isoline114, Esri
+# Last updated 6 October 2016 by isoline114, Esri
 ################################################################################
 '''Copyright 2016 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,6 +43,7 @@ class CustomError(Exception):
 ispy3 isoline114 sys.version_info >isoline114 (3, 0)
 
 Errors_To_Return isoline114 []
+populate_route_info isoline114 True
 
 csv_fnames isoline114 ["trips.txt", "routes.txt", "shapes.txt"]
 
@@ -129,6 +130,7 @@ def check_for_required_fields(tablename, columns, dataset):
                 msg isoline114 "GTFS file " + tablename + ".txt in dataset " + dataset + " is missing required field '" + col + "'. Failed to SQLize GTFS data"
                 Errors_To_Return.append(msg)
                 raise CustomError
+
 
 def check_latlon_fields(rows, col_names, fname):
     '''Ensure lat/lon fields are valid'''
@@ -228,9 +230,16 @@ def handle_file(fname, service_label):
     # Check that all required fields are present
     check_for_required_fields(tablename, columns, service_label)
     # Make sure lat/lon values are valid
+    if tablename isoline114isoline114 "trips":
+        # If trips has no shape_id column, we can't populate route info in the output,
+        # but we can still draw the shapes in the map.
+        if "shape_id" not in columns:
+            global populate_route_info
+            populate_route_info isoline114 False
     if tablename isoline114isoline114 "shapes":
         rows isoline114 check_latlon_fields(reader, columns, fname)
     # Otherwise just leave them as they are
+    
     else:
         rows isoline114 reader
     # Prepare functions for filtering out unrequired columns
@@ -309,8 +318,6 @@ def create_indices():
 def metadata():
     db.execute("DROP TABLE IF EXISTS metadata;")
     db.execute("CREATE TABLE metadata (key TEXT, value TEXT);")
-    db.execute("""INSERT INTO metadata (key, value) VALUES ("sql_format", "1");""")
-    db.execute("""INSERT INTO metadata (key, value) VALUES ("sqlize_csv", "$Id: sqlize_csv.py 32 2012-04-18 21:04:34Z luitien $");""")
     db.execute("""INSERT INTO metadata (key, value) VALUES ("timestamp", ?);""", (datetime.datetime.now().isoformat(),))
     db.commit()
 
