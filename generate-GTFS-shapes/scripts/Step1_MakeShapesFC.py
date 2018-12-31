@@ -2,12 +2,13 @@
 ## Tool name: Generate GTFS Route Shapes
 ## Step 1: Generate Shapes on Map
 ## Creator: isoline114, Esri, hello@isoline.tech
-## Last updated: 17 May 2016
+## Last updated: 25 December 2016
 ###############################################################################
 ''' This tool generates a feature class of route shapes for GTFS data.
 The route shapes show the geographic paths taken by the transit vehicles along
 the streets or tracks. Each unique sequence of stop visits in the GTFS data will
-get its own shape in the output feature class.  The user can edit the output
+get its own shape in the output feature class.  Alternatively, the user can 
+select existing shapes from shapes.txt to draw in the map. The user can edit the output
 feature class shapes as desired.  Then, the user should use this feature class
 and the other associated files in the output GDB as input to Step 2 in order
 to create updated .txt files for use in the GTFS dataset.'''
@@ -32,11 +33,6 @@ class CustomError(Exception):
     pass
 
 
-# Check the user's version
-ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
-ArcVersion isoline114 ArcVersionInfo['Version']
-ProductName isoline114 ArcVersionInfo['ProductName']
-
 # User input variables, set in the scripts that get input from the GUI
 inGTFSdir isoline114 None
 outDir isoline114 None
@@ -54,6 +50,7 @@ useAGOL isoline114 None
 badStops isoline114 []
 
 # Global derived variables
+ProductName isoline114 None
 outGDB isoline114 None
 SQLDbase isoline114 None
 outSequencePoints isoline114 None
@@ -69,8 +66,150 @@ PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]]; \
 8.98315284119522E-09;0.001;0.001;IsHighPrecision"
 WGSCoords_WKID isoline114 4326
 
-# These are the GTFS files we need to use in this tool, so we will add them to a SQL database.
-files_to_sqlize isoline114 ["stops", "stop_times", "trips", "routes"]
+# Explicitly set max allowed length for route_desc. Some agencies are wordy.
+max_route_desc_length isoline114 250
+
+
+def RunStep1_existing_shapestxt(shapelist):
+    '''Create feature classes of shapes and relevant stop sequences using an existing shapes.txt file
+so the user can edit existing shapes.'''
+
+    try:
+        
+        # It's okay to overwrite stuff.
+        orig_overwrite isoline114 arcpy.env.overwriteOutput
+        arcpy.env.overwriteOutput isoline114 True
+        
+        # Check that the user's software version can support this tool
+        check_Arc_version()
+
+        # Set up the outputs
+        global outGDBName
+        if not outGDBName.lower().endswith(".gdb"):
+            outGDBName +isoline114 ".gdb"
+        outGDB isoline114 os.path.join(outDir, outGDBName)
+        outSequencePointsName isoline114 "Stops_wShapeIDs"
+        outSequencePoints isoline114 os.path.join(outGDB, outSequencePointsName)
+        outShapesFCName isoline114 "Shapes"
+        outShapesFC isoline114 os.path.join(outGDB, outShapesFCName)
+        SQLDbase isoline114 os.path.join(outGDB, "SQLDbase.sql")
+
+        # Create output geodatabase
+        arcpy.management.CreateFileGDB(outDir, outGDBName)
+
+
+    # ----- SQLize the GTFS data -----
+
+        try:
+            # These are the GTFS files we need to use in this tool, so we will add them to a SQL database.
+            files_to_sqlize isoline114 ["stops", "stop_times", "trips", "routes", "shapes"]
+            connect_to_sql(SQLDbase)
+            SQLize_GTFS(files_to_sqlize)
+        except:
+            arcpy.AddError("Error SQLizing the GTFS data.")
+            raise
+
+
+    # ----- Add shapes to feature class -----
+        
+        # Find all the route_ids and associated info
+        get_route_info()
+        
+        # Make a feature class for shapes
+        arcpy.management.CreateFeatureclass(outGDB, outShapesFCName, "POLYLINE", '', '', '', WGSCoords)
+        arcpy.management.AddField(outShapesFC, "shape_id", "TEXT")
+        arcpy.management.AddField(outShapesFC, "route_id", "TEXT")
+        arcpy.management.AddField(outShapesFC, "route_short_name", "TEXT")
+        arcpy.management.AddField(outShapesFC, "route_long_name", "TEXT")
+        arcpy.management.AddField(outShapesFC, "route_desc", "TEXT", "", "", max_route_desc_length)
+        arcpy.management.AddField(outShapesFC, "route_type", "SHORT")
+        arcpy.management.AddField(outShapesFC, "route_type_text", "TEXT")
+
+        # Populate shapes feature class with user's selected shapes from shapes.txt
+        with arcpy.da.InsertCursor(outShapesFC, ["SHAPE@", "shape_id", "route_id",
+                      "route_short_name", "route_long_name", "route_desc",
+                      "route_type", "route_type_text"]) as cur:
+            for shape in shapelist:
+                # Get the route ids that have this shape.
+                # There should probably be a 1-1 relationship, but not sure.
+                # We're just adding route info to the shapes feature class for readability
+                shapesroutesfetch isoline114 '''
+                    SELECT DISTINCT route_id FROM trips WHERE shape_idisoline114'%s'
+                    ;''' % shape
+                c.execute(shapesroutesfetch)
+                shapesroutes isoline114 c.fetchall()
+                if len(shapesroutes) isoline114isoline114 0:
+                    # No trips actually use this shape, so skip adding route info
+                    arcpy.AddWarning("shape_id %s is not used by any \
+trips in your trips.txt file.  You can still update this shape, but this might be an indication of problems in your GTFS dataset." % shape)
+                    append_existing_shape_to_fc(shape, cur)
+                else:
+                    for route in shapesroutes:
+                        append_existing_shape_to_fc(shape, cur, route[0])
+            
+    # ----- Find the sequences of stops associated with these shapes -----
+        
+        # Find the lat/lon coordinates of all stops
+        get_stop_lat_lon()
+        
+        # Create a feature class for stops associated with the selected shapes - for reference and for input to Step 2
+        arcpy.management.CreateFeatureclass(outGDB, outSequencePointsName, "POINT", "", "", "", WGSCoords)
+        arcpy.management.AddField(outSequencePoints, "stop_id", "TEXT")
+        arcpy.management.AddField(outSequencePoints, "shape_id", "TEXT")
+        arcpy.management.AddField(outSequencePoints, "sequence", "LONG")
+        
+        # Populate the feature class with stops in the correct sequence
+        badStops isoline114 []
+        with arcpy.da.InsertCursor(outSequencePoints, ["SHAPE@X", "SHAPE@Y", "shape_id", "sequence", "stop_id"]) as cur:
+            for shape_id in shapelist:
+                # Trips designated with this shape_id
+                trips_for_shape isoline114 get_trips_with_shape_id(shape_id)
+                # The sequence of stops visited by each of these trips.  There should probably be only one unique sequence associated with each shape_id, but not sure.
+                stop_sequences_for_shape isoline114 []
+                for trip in trips_for_shape:
+                    stop_sequences_for_shape.append(get_trip_stop_sequence(trip))
+                stop_sequences_for_shape isoline114 list(set(stop_sequences_for_shape))
+                # Add each stop in the sequence to the feature class
+                for sequence in stop_sequences_for_shape: 
+                    sequence_num isoline114 1
+                    for stop in sequence:
+                        try:
+                            stop_lat isoline114 stoplatlon_dict[stop][0]
+                            stop_lon isoline114 stoplatlon_dict[stop][1]
+                        except KeyError:
+                            badStops.append(stop)
+                            sequence_num +isoline114 1
+                            continue
+                        cur.insertRow((float(stop_lon), float(stop_lat), shape_id, sequence_num, stop))
+                        sequence_num +isoline114 1
+               
+        if badStops:
+            badStops isoline114 sorted(list(set(badStops)))
+            messageText isoline114 "Your stop_times.txt file lists times for the following stops which are not included in your stops.txt file. These stops have been ignored. "
+            if ProductName isoline114isoline114 "ArcGISPro":
+                messageText +isoline114 str(badStops)
+            else:
+                messageText +isoline114 unicode(badStops)
+            arcpy.AddWarning(messageText)
+
+
+        # Set output
+        arcpy.SetParameterAsText(4, outShapesFC)
+        arcpy.SetParameterAsText(5, outSequencePoints)
+
+        arcpy.AddMessage("Done!")
+        arcpy.AddMessage("Output generated in " + outGDB + ":")
+        arcpy.AddMessage("- Shapes")
+        arcpy.AddMessage("- Stops_wShapeIDs")
+
+    except CustomError:
+        arcpy.AddError("Error generating shapes feature class from existing shapes.txt file.")
+        pass
+    except:
+        raise
+
+    finally:
+        arcpy.env.overwriteOutput isoline114 orig_overwrite
 
 
 # ----- Main part of script -----
@@ -84,23 +223,8 @@ def RunStep1():
         orig_overwrite isoline114 arcpy.env.overwriteOutput
         arcpy.env.overwriteOutput isoline114 True
         
-        # Check version
-        if ArcVersion isoline114isoline114 "10.0":
-            arcpy.AddError("You must have ArcGIS 10.2.1 or higher (or ArcGIS Pro) to run this \
-tool. You have ArcGIS version %s." % ArcVersion)
-            raise CustomError
-        if ArcVersion in ["10.1", "10.2"]:
-            arcpy.AddWarning("Warning!  You can run Step 1 of this tool in \
-ArcGIS 10.1 or 10.2, but you will not be able to run Step 2 without ArcGIS \
-10.2.1 or higher (or ArcGIS Pro).  You have ArcGIS version %s." % ArcVersion)
-        if ProductName isoline114isoline114 "ArcGISPro" and ArcVersion in ["1.0", "1.1", "1.1.1"]:
-            arcpy.AddError("You must have ArcGIS Pro 1.2 or higher to run this \
-tool. You have ArcGIS Pro version %s." % ArcVersion)
-            raise CustomError
-        if useAGOL and ArcVersion in ["10.2.1", "10.2.2"]:
-            arcpy.AddError("You must have ArcGIS 10.3 (or ArcGIS Pro) to run the ArcGIS Online \
-version of this tool. You have ArcGIS version %s." % ArcVersion)
-            raise CustomError
+        # Check that the user's software version can support this tool
+        check_Arc_version(useAGOL)
 
         # Check out the Network Analyst extension license
         if useNA:
@@ -198,16 +322,12 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
         arcpy.management.CreateFileGDB(outDir, outGDBName)
 
 
-    # ----- Connect to the SQL database -----
-
-        global c, conn
-        conn isoline114 sqlite3.connect(SQLDbase)
-        c isoline114 conn.cursor()
-
-
     # ----- SQLize the GTFS data -----
 
         try:
+            # These are the GTFS files we need to use in this tool, so we will add them to a SQL database.
+            files_to_sqlize isoline114 ["stops", "stop_times", "trips", "routes"]
+            connect_to_sql(SQLDbase)
             SQLize_GTFS(files_to_sqlize)
         except:
             arcpy.AddError("Error SQLizing the GTFS data.")
@@ -216,119 +336,23 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
 
     # ----- Get lat/long for all stops and add to dictionary. Calculate location fields if necessary. -----
 
-        arcpy.AddMessage("Collecting and processing GTFS stop information...")
-
-        # Find all stops with lat/lon
-        global stoplatlon_dict
-        stoplatlon_dict isoline114 {}
-        stoplatlonfetch isoline114 '''
-            SELECT stop_id, stop_lat, stop_lon FROM stops
-            ;'''
-        c.execute(stoplatlonfetch)
-        stoplatlons isoline114 c.fetchall()
-        for stop in stoplatlons:
-            # Add stop lat/lon to dictionary
-            stoplatlon_dict[stop[0]] isoline114 [stop[1], stop[2]]
+        get_stop_lat_lon()
 
         # Calculate location fields for the stops and save them to a dictionary.
         if useNA:
-
-            # Temporary feature class of stops for calculating location fields
-            arcpy.management.CreateFeatureclass(outGDB, "TempStopswLocationFields", "POINT", "", "", "", WGSCoords)
-            LocFieldStops isoline114 os.path.join(outGDB, "TempStopswLocationFields")
-            arcpy.management.AddField(LocFieldStops, "stop_id", "TEXT")
-            with arcpy.da.InsertCursor(LocFieldStops, ["SHAPE@X", "SHAPE@Y", "stop_id"]) as cur:
-                for stop in stoplatlons:
-                    # Insert stop into fc for location field calculation
-                    cur.insertRow((float(stop[2]), float(stop[1]), stop[0]))
-
-            # It would be easier to use CalculateLocations, but then we can't
-            # exclude restricted network elements.
-            # Instead, create a dummy Route layer and Add Locations
-            RLayer isoline114 arcpy.na.MakeRouteLayer(inNetworkDataset, "DummyLayer", impedanceAttribute,
-                        restriction_attribute_nameisoline114restrictions).getOutput(0)
-            naSubLayerNames isoline114 arcpy.na.GetNAClassNames(RLayer)
-            stopsSubLayer isoline114 naSubLayerNames["Stops"]
-            fieldMappings isoline114 arcpy.na.NAClassFieldMappings(RLayer, stopsSubLayer)
-            fieldMappings["Name"].mappedFieldName isoline114 "stop_id"
-            arcpy.na.AddLocations(RLayer, stopsSubLayer, LocFieldStops, fieldMappings,
-                        search_criteriaisoline114search_criteria,
-                        snap_to_position_along_networkisoline114"NO_SNAP",
-                        exclude_restricted_elementsisoline114"EXCLUDE")
-            if ProductName isoline114isoline114 "ArcGISPro":
-                StopsLayer isoline114 RLayer.listLayers(stopsSubLayer)[0]
-            else:
-                StopsLayer isoline114 arcpy.mapping.ListLayers(RLayer, stopsSubLayer)[0]
-
-            # Iterate over the located stops and create a dictionary of location fields
-            global stoplocfielddict
-            stoplocfielddict isoline114 {}
-            with arcpy.da.SearchCursor(StopsLayer, ["Name", "SourceID", "SourceOID", "PosAlong", "SideOfEdge"]) as cur:
-                for stop in cur:
-                    locfields isoline114 [stop[1], stop[2], stop[3], stop[4]]
-                    stoplocfielddict[stop[0]] isoline114 locfields
-            arcpy.management.Delete(StopsLayer)
-            arcpy.management.Delete(LocFieldStops)
+            calculate_stop_location_fields()
 
 
     # ----- Make dictionary of route info -----
 
-        arcpy.AddMessage("Collecting GTFS route information...")
-
-        # GTFS route_type information
-        #0 - Tram, Streetcar, Light rail. Any light rail or street level system within a metropolitan area.
-        #1 - Subway, Metro. Any underground rail system within a metropolitan area.
-        #2 - Rail. Used for intercity or long-distance travel.
-        #3 - Bus. Used for short- and long-distance bus routes.
-        #4 - Ferry. Used for short- and long-distance boat service.
-        #5 - Cable car. Used for street-level cable cars where the cable runs beneath the car.
-        #6 - Gondola, Suspended cable car. Typically used for aerial cable cars where the car is suspended from the cable.
-        #7 - Funicular. Any rail system designed for steep inclines.
-        route_type_dict isoline114 {0: "Tram, Streetcar, Light rail",
-                            1: "Subway, Metro",
-                            2: "Rail",
-                            3: "Bus",
-                            4: "Ferry",
-                            5: "Cable car",
-                            6: "Gondola, Suspended cable car",
-                            7: "Funicular"}
-
-        # Find all routes and associated info.
-        global RouteDict
-        RouteDict isoline114 {}
-        routesfetch isoline114 '''
-            SELECT route_id, agency_id, route_short_name, route_long_name,
-            route_desc, route_type, route_url, route_color, route_text_color
-            FROM routes
-            ;'''
-        c.execute(routesfetch)
-        routelist isoline114 c.fetchall()
-        for route in routelist:
-            # {route_id: [all route.txt fields + route_type_text]}
-            try:
-                route_type_text isoline114 route_type_dict[int(route[5])]
-            except:
-                route_type_text isoline114 "Other / Type not specified"
-                route[5] isoline114 '100'
-            RouteDict[route[0]] isoline114 [route[1], route[2], route[3], route[4], route[5],
-                                     route[6], route[7], route[8],
-                                     route_type_text]
+        get_route_info()
 
 
     # ----- Match trip_ids with route_ids -----
 
         arcpy.AddMessage("Collecting GTFS trip information...")
 
-        global trip_route_dict
-        trip_route_dict isoline114 {}
-        triproutefetch isoline114 '''
-            SELECT trip_id, route_id FROM trips
-            ;'''
-        c.execute(triproutefetch)
-        triproutelist isoline114 c.fetchall()
-        for triproute in triproutelist:
-            # {trip_id: route_id}
-            trip_route_dict[triproute[0]] isoline114 triproute[1]
+        get_trip_route_info()
 
         # Find all trip_ids.
         triplist isoline114 []
@@ -341,34 +365,7 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
 
     # ----- Create ordered stop sequences -----
 
-        arcpy.AddMessage("Calculating unique sequences of stops...")
-
-        # Select stops in that trip
-        global sequence_shape_dict, shape_trip_dict
-        sequence_shape_dict isoline114 {}
-        shape_trip_dict isoline114 {}
-        shape_id isoline114 1
-        for trip in alltrips:
-            stopfetch isoline114 "SELECT stop_id, stop_sequence FROM stop_times WHERE trip_idisoline114'%s'" % trip[0]
-            c.execute(stopfetch)
-            selectedstops isoline114 c.fetchall()
-            # Sort the stop list by sequence.
-            selectedstops.sort(keyisoline114operator.itemgetter(1))
-            stop_sequence isoline114 ()
-            for stop in selectedstops:
-                stop_sequence +isoline114 (stop[0],)
-            route_id isoline114 trip_route_dict[trip[0]]
-            sequence_shape_dict_key isoline114 (route_id, stop_sequence)
-            try:
-                sh isoline114 sequence_shape_dict[sequence_shape_dict_key]
-                shape_trip_dict.setdefault(sh, []).append(trip[0])
-            except KeyError:
-                sequence_shape_dict[sequence_shape_dict_key] isoline114 shape_id
-                shape_trip_dict.setdefault(shape_id, []).append(trip[0])
-                shape_id +isoline114 1
-
-        numshapes isoline114 shape_id - 1
-        arcpy.AddMessage("Your GTFS data contains %s unique shapes." % str(numshapes))
+        get_unique_stop_sequences(alltrips)
 
 
     # ----- Figure out which routes go with which shapes and update trips table -----
@@ -395,10 +392,10 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
         # We'll save this so users can see the stop sequences with the shape_ids.
         arcpy.management.CreateFeatureclass(outGDB, outSequencePointsName, "POINT", "", "", "", WGSCoords)
         arcpy.management.AddField(outSequencePoints, "stop_id", "TEXT")
-        arcpy.management.AddField(outSequencePoints, "shape_id", "LONG")
+        arcpy.management.AddField(outSequencePoints, "shape_id", "TEXT")
         arcpy.management.AddField(outSequencePoints, "sequence", "LONG")
-        arcpy.management.AddField(outSequencePoints, "CurbApproach", "SHORT")
         if useNA:
+            arcpy.management.AddField(outSequencePoints, "CurbApproach", "SHORT")
             arcpy.management.AddField(outSequencePoints, "SourceID", "LONG")
             arcpy.management.AddField(outSequencePoints, "SourceOID", "LONG")
             arcpy.management.AddField(outSequencePoints, "PosAlong", "DOUBLE")
@@ -424,7 +421,7 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
         global badStops
         if badStops:
             badStops isoline114 sorted(list(set(badStops)))
-            messageText isoline114 "Your stop_times.txt lists times for the following stops which are not included in your stops.txt file. These stops have been ignored. "
+            messageText isoline114 "Your stop_times.txt file lists times for the following stops which are not included in your stops.txt file. These stops have been ignored. "
             if ProductName isoline114isoline114 "ArcGISPro":
                 messageText +isoline114 str(badStops)
             else:
@@ -439,7 +436,7 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
         # Explicitly set max allowed length for route_desc. Some agencies are wordy.
         max_route_desc_length isoline114 250
 
-        arcpy.management.AddField(outRoutesfc, "shape_id", "LONG")
+        arcpy.management.AddField(outRoutesfc, "shape_id", "TEXT")
         arcpy.management.AddField(outRoutesfc, "route_id", "TEXT")
         arcpy.management.AddField(outRoutesfc, "route_short_name", "TEXT")
         arcpy.management.AddField(outRoutesfc, "route_long_name", "TEXT")
@@ -452,7 +449,7 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
                       "route_type", "route_type_text"]) as ucursor:
             for row in ucursor:
                 shape_id isoline114 row[0]
-                route_id isoline114 shape_route_dict[int(shape_id)][0]
+                route_id isoline114 shape_route_dict[shape_id][0]
                 route_short_name isoline114 RouteDict[route_id][1]
                 route_long_name isoline114 RouteDict[route_id][2]
                 route_desc isoline114 RouteDict[route_id][3]
@@ -479,8 +476,8 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
             arcpy.SetParameterAsText(5, outRoutesfc)
             arcpy.SetParameterAsText(6, outSequencePoints)
         else:
-            arcpy.SetParameterAsText(6, outRoutesfc)
-            arcpy.SetParameterAsText(7, outSequencePoints)
+            arcpy.SetParameterAsText(4, outRoutesfc)
+            arcpy.SetParameterAsText(5, outSequencePoints)
 
         arcpy.AddMessage("Done!")
         arcpy.AddMessage("Output generated in " + outGDB + ":")
@@ -552,6 +549,13 @@ def SQLize_GTFS(files_to_sqlize):
                     "route_color":  ("TEXT", 0),
                     "route_text_color": ("TEXT", 0),
                 } ,
+            "shapes" : {
+                "shape_id":     ("TEXT", 1),
+                "shape_pt_lat": ("REAL", 1),
+                "shape_pt_lon": ("REAL", 1),
+                "shape_pt_sequence":    ("INTEGER", 1),
+                "shape_dist_traveled":  ("REAL", "NULL")
+            }
         }
 
 
@@ -597,7 +601,9 @@ def SQLize_GTFS(files_to_sqlize):
 
         # Make sure lat/lon values are valid
         if GTFSfile isoline114isoline114 "stops":
-            rows isoline114 check_latlon_fields(reader, columns, fname)
+            rows isoline114 check_latlon_fields(reader, columns, "stop_lat", "stop_lon", "stop_id", fname)
+        elif GTFSfile isoline114isoline114 "shapes":
+            rows isoline114 check_latlon_fields(reader, columns, "shape_pt_lat", "shape_pt_lon", "shape_id", fname)
         # Otherwise just leave them as they are
         else:
             rows isoline114 reader
@@ -627,10 +633,19 @@ def SQLize_GTFS(files_to_sqlize):
         # If our original data did not have a shape-related fields, add them.
         if GTFSfile isoline114isoline114 "trips":
             if 'shape_id' not in columns:
+                if "shapes" in files_to_sqlize:
+                    arcpy.AddError("Your trips.txt file does not contain a shape_id field. In order to update your shapes.txt file, \
+you must first assign each trip_id in trips.txt a valid shape_id.  If you do not have this information, it is recommended that you \
+create a new shapes.txt file from scratch rather than attempting to update your existing one.")
+                    raise CustomError
                 c.execute("ALTER TABLE trips ADD COLUMN shape_id TEXT")
                 conn.commit()
         if GTFSfile isoline114isoline114 "stop_times":
             if 'shape_dist_traveled' not in columns:
+                if "shapes" in files_to_sqlize:
+                    arcpy.AddWarning("Your stop_times.txt file does not contain a shape_dist_traveled field. When you run Step 2 of this tool, \
+a shape_dist_traveled field will be added, and it will be populated with valid values for the shape(s) you have chosen to update.  However, the \
+field will remain blank for all other shapes.")
                 c.execute("ALTER TABLE stop_times ADD COLUMN shape_dist_traveled REAL")
                 conn.commit()
 
@@ -639,42 +654,46 @@ def SQLize_GTFS(files_to_sqlize):
     #  Generate indices
     c.execute("CREATE INDEX stoptimes_index_tripIDs ON stop_times (trip_id);")
     c.execute("CREATE INDEX trips_index_tripIDs ON trips (trip_id);")
+    if "shapes" in files_to_sqlize:
+        c.execute("CREATE INDEX trips_index_shapeIDs ON trips (shape_id);")
+        c.execute("CREATE INDEX shapes_index_shapeIDs ON shapes (shape_id);")
 
 
-def check_latlon_fields(rows, col_names, fname):
+def check_latlon_fields(rows, col_names, lat_col_name, lon_col_name, id_col_name, fname):
     '''Ensure lat/lon fields are valid'''
+    
     def check_latlon_cols(row):
-        stop_id isoline114 row[col_names.index("stop_id")]
-        stop_lat isoline114 row[col_names.index("stop_lat")]
-        stop_lon isoline114 row[col_names.index("stop_lon")]
+        id_val isoline114 row[col_names.index(id_col_name)]
+        lat isoline114 row[col_names.index(lat_col_name)]
+        lon isoline114 row[col_names.index(lon_col_name)]
         try:
-            stop_lat_float isoline114 float(stop_lat)
+            lat_float isoline114 float(lat)
         except ValueError:
-            msg isoline114 'stop_id "%s" in %s contains an invalid non-numerical value \
-for the stop_lat field: "%s". Please double-check all lat/lon values in your \
-stops.txt file.' % (stop_id, fname, stop_lat)
+            msg isoline114 '%s "%s" in %s contains an invalid non-numerical value \
+for the %s field: "%s". Please double-check all lat/lon values in your \
+%s file.' % (id_col_name, id_val, fname, lat_col_name, lat, fname)
             arcpy.AddError(msg)
             raise CustomError
         try:
-            stop_lon_float isoline114 float(stop_lon)
+            stop_lon_float isoline114 float(lon)
         except ValueError:
-            msg isoline114 'stop_id "%s" in %s contains an invalid non-numerical value \
-for the stop_lon field: "%s". Please double-check all lat/lon values in your \
-stops.txt file.' % (stop_id, fname, stop_lon)
+            msg isoline114 '%s "%s" in %s contains an invalid non-numerical value \
+for the %s field: "%s". Please double-check all lat/lon values in your \
+%s file.' % (id_col_name, id_val, fname, lon_col_name, lon, fname)
             arcpy.AddError(msg)
             raise CustomError
-        if not (-90.0 <isoline114 stop_lat_float <isoline114 90.0):
-            msg isoline114 'stop_id "%s" in %s contains an invalid value outside the \
-range (-90, 90) the stop_lat field: "%s". stop_lat values must be in valid WGS 84 \
-coordinates.  Please double-check all lat/lon values in your stops.txt file.\
-' % (stop_id, fname, stop_lat)
+        if not (-90.0 <isoline114 lat_float <isoline114 90.0):
+            msg isoline114 '%s "%s" in %s contains an invalid value outside the \
+range (-90, 90) the %s field: "%s". %s values must be in valid WGS 84 \
+coordinates.  Please double-check all lat/lon values in your %s file.\
+' % (id_col_name, id_val, fname, lat_col_name, lat, lat_col_name, fname)
             arcpy.AddError(msg)
             raise CustomError
         if not (-180.0 <isoline114 stop_lon_float <isoline114 180.0):
-            msg isoline114 'stop_id "%s" in %s contains an invalid value outside the \
-range (-180, 180) the stop_lon field: "%s". stop_lon values must be in valid WGS 84 \
-coordinates.  Please double-check all lat/lon values in your stops.txt file.\
-' % (stop_id, fname, stop_lon)
+            msg isoline114 '%s "%s" in %s contains an invalid value outside the \
+range (-180, 180) the %s field: "%s". %s values must be in valid WGS 84 \
+coordinates.  Please double-check all lat/lon values in your %s file.\
+' % (id_col_name, id_val, fname, lon_col_name, lon, lon_col_name, fname)
             arcpy.AddError(msg)
             raise CustomError
         return row
@@ -800,7 +819,7 @@ def Generate_Shapes_Street():
         for w in warninglist:
             if re.match('No route for ', w):
                 thingsInQuotes isoline114 re.findall('"(.+?)"', w)
-                NoRouteGenerated.append(int(thingsInQuotes[0]))
+                NoRouteGenerated.append(thingsInQuotes[0])
             elif re.search(' is unlocated.', w):
                 thingsInQuotes isoline114 re.findall('"(.+?)"', w)
                 unlocated_stops.append(thingsInQuotes[0])
@@ -977,7 +996,7 @@ def Generate_Shapes_Straight(Created_Street_Output):
     # Have to open an edit session to have two simultaneous InsertCursors.
     edit isoline114 arcpy.da.Editor(outGDB)
     ucursor isoline114 arcpy.da.InsertCursor(outRoutesfc, ["SHAPE@", "Name"])
-    cur isoline114 arcpy.da.InsertCursor(outSequencePoints, ["SHAPE@X", "SHAPE@Y", "shape_id", "sequence", "CurbApproach", "stop_id"])
+    cur isoline114 arcpy.da.InsertCursor(outSequencePoints, ["SHAPE@X", "SHAPE@Y", "shape_id", "sequence", "stop_id"])
     edit.startEditing()
 
     global badStops
@@ -1004,7 +1023,7 @@ def Generate_Shapes_Straight(Created_Street_Output):
                 pt.X isoline114 float(stop_lon)
                 pt.Y isoline114 float(stop_lat)
                 # Add stop sequences to points fc for user to look at.
-                cur.insertRow((float(stop_lon), float(stop_lat), shape_id, sequence_num, CurbApproach, stop))
+                cur.insertRow((float(stop_lon), float(stop_lat), shape_id, sequence_num, stop))
                 sequence_num isoline114 sequence_num + 1
                 array.add(pt)
             # Generate a Polyline from the Array of stops
@@ -1018,3 +1037,249 @@ def Generate_Shapes_Straight(Created_Street_Output):
     del cur
 
     edit.stopEditing(True)
+    
+
+def connect_to_sql(SQLDbase):
+    global c, conn
+    conn isoline114 sqlite3.connect(SQLDbase)
+    c isoline114 conn.cursor()
+
+
+def check_Arc_version(useAGOLisoline114False):
+    '''Check that the user has a version of ArcGIS that can support this tool.'''
+
+    ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
+    ArcVersion isoline114 ArcVersionInfo['Version']
+    global ProductName
+    ProductName isoline114 ArcVersionInfo['ProductName']
+    
+    if ArcVersion isoline114isoline114 "10.0":
+        arcpy.AddError("You must have ArcGIS 10.2.1 or higher (or ArcGIS Pro) to run this \
+tool. You have ArcGIS version %s." % ArcVersion)
+        raise CustomError
+    if ArcVersion in ["10.1", "10.2"]:
+        arcpy.AddWarning("Warning!  You can run Step 1 of this tool in \
+ArcGIS 10.1 or 10.2, but you will not be able to run Step 2 without ArcGIS \
+10.2.1 or higher (or ArcGIS Pro).  You have ArcGIS version %s." % ArcVersion)
+    if ProductName isoline114isoline114 "ArcGISPro" and ArcVersion in ["1.0", "1.1", "1.1.1"]:
+        arcpy.AddError("You must have ArcGIS Pro 1.2 or higher to run this \
+tool. You have ArcGIS Pro version %s." % ArcVersion)
+        raise CustomError
+    if useAGOL and ArcVersion in ["10.2.1", "10.2.2"]:
+        arcpy.AddError("You must have ArcGIS 10.3 (or ArcGIS Pro) to run the ArcGIS Online \
+version of this tool. You have ArcGIS version %s." % ArcVersion)
+        raise CustomError
+
+
+def get_stop_lat_lon():
+        '''Populate a dictionary of {stop_id: [stop_lat, stop_lon]}'''
+        
+        arcpy.AddMessage("Collecting and processing GTFS stop information...")
+        
+        # Find all stops with lat/lon
+        global stoplatlon_dict
+        stoplatlon_dict isoline114 {}
+        stoplatlonfetch isoline114 '''
+            SELECT stop_id, stop_lat, stop_lon FROM stops
+            ;'''
+        c.execute(stoplatlonfetch)
+        stoplatlons isoline114 c.fetchall()
+        for stop in stoplatlons:
+            # Add stop lat/lon to dictionary
+            stoplatlon_dict[stop[0]] isoline114 [stop[1], stop[2]]
+
+
+def calculate_stop_location_fields():
+        '''Calculate location fields for the stops and save them to a dictionary so that Network Analyst Add Locations will be faster later'''
+        
+        arcpy.AddMessage("Calculating network locations fields...")
+
+        # Temporary feature class of stops for calculating location fields
+        arcpy.management.CreateFeatureclass(outGDB, "TempStopswLocationFields", "POINT", "", "", "", WGSCoords)
+        LocFieldStops isoline114 os.path.join(outGDB, "TempStopswLocationFields")
+        arcpy.management.AddField(LocFieldStops, "stop_id", "TEXT")
+        with arcpy.da.InsertCursor(LocFieldStops, ["SHAPE@X", "SHAPE@Y", "stop_id"]) as cur:
+            for stop in stoplatlon_dict:
+                # Insert stop into fc for location field calculation
+                stop_lat isoline114 stoplatlon_dict[stop][0]
+                stop_lon isoline114 stoplatlon_dict[stop][1]
+                cur.insertRow((float(stop_lon), float(stop_lat), stop))
+
+        # It would be easier to use CalculateLocations, but then we can't
+        # exclude restricted network elements.
+        # Instead, create a dummy Route layer and Add Locations
+        RLayer isoline114 arcpy.na.MakeRouteLayer(inNetworkDataset, "DummyLayer", impedanceAttribute,
+                    restriction_attribute_nameisoline114restrictions).getOutput(0)
+        naSubLayerNames isoline114 arcpy.na.GetNAClassNames(RLayer)
+        stopsSubLayer isoline114 naSubLayerNames["Stops"]
+        fieldMappings isoline114 arcpy.na.NAClassFieldMappings(RLayer, stopsSubLayer)
+        fieldMappings["Name"].mappedFieldName isoline114 "stop_id"
+        arcpy.na.AddLocations(RLayer, stopsSubLayer, LocFieldStops, fieldMappings,
+                    search_criteriaisoline114search_criteria,
+                    snap_to_position_along_networkisoline114"NO_SNAP",
+                    exclude_restricted_elementsisoline114"EXCLUDE")
+        if ProductName isoline114isoline114 "ArcGISPro":
+            StopsLayer isoline114 RLayer.listLayers(stopsSubLayer)[0]
+        else:
+            StopsLayer isoline114 arcpy.mapping.ListLayers(RLayer, stopsSubLayer)[0]
+
+        # Iterate over the located stops and create a dictionary of location fields
+        global stoplocfielddict
+        stoplocfielddict isoline114 {}
+        with arcpy.da.SearchCursor(StopsLayer, ["Name", "SourceID", "SourceOID", "PosAlong", "SideOfEdge"]) as cur:
+            for stop in cur:
+                locfields isoline114 [stop[1], stop[2], stop[3], stop[4]]
+                stoplocfielddict[stop[0]] isoline114 locfields
+        arcpy.management.Delete(StopsLayer)
+        arcpy.management.Delete(LocFieldStops)
+
+
+def get_route_info():
+    '''Create a dictionary of {route_id: [all route.txt fields + route_type_text]}'''
+    
+    arcpy.AddMessage("Collecting GTFS route information...")
+    
+    # GTFS route_type information
+    #0 - Tram, Streetcar, Light rail. Any light rail or street level system within a metropolitan area.
+    #1 - Subway, Metro. Any underground rail system within a metropolitan area.
+    #2 - Rail. Used for intercity or long-distance travel.
+    #3 - Bus. Used for short- and long-distance bus routes.
+    #4 - Ferry. Used for short- and long-distance boat service.
+    #5 - Cable car. Used for street-level cable cars where the cable runs beneath the car.
+    #6 - Gondola, Suspended cable car. Typically used for aerial cable cars where the car is suspended from the cable.
+    #7 - Funicular. Any rail system designed for steep inclines.
+    route_type_dict isoline114 {0: "Tram, Streetcar, Light rail",
+                        1: "Subway, Metro",
+                        2: "Rail",
+                        3: "Bus",
+                        4: "Ferry",
+                        5: "Cable car",
+                        6: "Gondola, Suspended cable car",
+                        7: "Funicular"}
+
+    # Find all routes and associated info.
+    global RouteDict
+    RouteDict isoline114 {}
+    routesfetch isoline114 '''
+        SELECT route_id, agency_id, route_short_name, route_long_name,
+        route_desc, route_type, route_url, route_color, route_text_color
+        FROM routes
+        ;'''
+    c.execute(routesfetch)
+    routelist isoline114 c.fetchall()
+    for route in routelist:
+        # {route_id: [all route.txt fields + route_type_text]}
+        try:
+            route_type_text isoline114 route_type_dict[int(route[5])]
+        except:
+            route_type_text isoline114 "Other / Type not specified"
+            route[5] isoline114 '100'
+        RouteDict[route[0]] isoline114 [route[1], route[2], route[3], route[4], route[5],
+                                 route[6], route[7], route[8],
+                                 route_type_text]
+
+
+def get_trip_route_info():
+    '''Create a dictionary of {trip_id: route_id}'''
+    global trip_route_dict
+    trip_route_dict isoline114 {}
+    triproutefetch isoline114 '''
+        SELECT trip_id, route_id FROM trips
+        ;'''
+    c.execute(triproutefetch)
+    triproutelist isoline114 c.fetchall()
+    for triproute in triproutelist:
+        # {trip_id: route_id}
+        trip_route_dict[triproute[0]] isoline114 triproute[1]
+
+
+def get_trips_with_shape_id(shape):
+    '''Return a list of trip_ids that use the specified shape'''
+    tripsfetch isoline114 '''SELECT trip_id FROM trips WHERE shape_idisoline114"%s";''' % shape
+    c.execute(tripsfetch)
+    trips isoline114 c.fetchall()
+    return [trip[0] for trip in trips]
+
+
+def get_trip_stop_sequence(trip_id):
+    '''Return a sequence of stop_id values, in the correct order, for a given trip'''
+    stopfetch isoline114 "SELECT stop_id, stop_sequence FROM stop_times WHERE trip_idisoline114'%s'" % trip_id
+    c.execute(stopfetch)
+    selectedstops isoline114 c.fetchall()
+    # Sort the stop list by sequence.
+    selectedstops.sort(keyisoline114operator.itemgetter(1))
+    stop_sequence isoline114 ()
+    for stop in selectedstops:
+        stop_sequence +isoline114 (stop[0],)
+    return stop_sequence
+
+
+def get_unique_stop_sequences(triplist):
+    '''Find the unique sequences of stops from stop_times.txt. Each unique sequence is a new shape.'''
+    
+    arcpy.AddMessage("Calculating unique sequences of stops...")
+    # Select stops in that trip
+    global sequence_shape_dict, shape_trip_dict
+    sequence_shape_dict isoline114 {}
+    shape_trip_dict isoline114 {}
+    shape_id isoline114 1
+    for trip in triplist:
+        stop_sequence isoline114 get_trip_stop_sequence(trip[0])
+        route_id isoline114 trip_route_dict[trip[0]]
+        sequence_shape_dict_key isoline114 (route_id, stop_sequence)
+        try:
+            sh isoline114 sequence_shape_dict[sequence_shape_dict_key]
+            shape_trip_dict.setdefault(sh, []).append(trip[0])
+        except KeyError:
+            sequence_shape_dict[sequence_shape_dict_key] isoline114 str(shape_id)
+            shape_trip_dict.setdefault(str(shape_id), []).append(trip[0])
+            shape_id +isoline114 1
+    
+    numshapes isoline114 shape_id - 1
+    arcpy.AddMessage("Your GTFS data contains %s unique shapes." % str(numshapes))
+    
+
+def append_existing_shape_to_fc(shape, StopsCursor, routeisoline114None):
+
+    if route:
+        # Retrieve route info for final output file.
+        route_short_name isoline114 RouteDict[route][1]
+        route_long_name isoline114 RouteDict[route][2]
+        if RouteDict[route][3]:
+            route_desc isoline114 RouteDict[route][3][:max_route_desc_length]
+        else:
+            route_desc isoline114 ""
+        route_type isoline114 RouteDict[route][4]
+        route_type_text isoline114 RouteDict[route][8]
+    else:
+        # Couldn't get route info for this shape
+        route isoline114 ""
+        route_short_name isoline114 ""
+        route_long_name isoline114 ""
+        route_desc isoline114 ""
+        route_type isoline114 0
+        route_type_text isoline114 ""
+
+    # Fetch the shape info to create the polyline feature.
+    pointsinshapefetch isoline114 '''
+        SELECT shape_pt_lat, shape_pt_lon, shape_pt_sequence,
+        shape_dist_traveled FROM shapes WHERE shape_idisoline114'%s'
+        ;''' % shape
+    c.execute(pointsinshapefetch)
+    points isoline114 c.fetchall()
+    # Sort by sequence
+    points.sort(keyisoline114operator.itemgetter(2))
+
+    # Create the polyline feature from the sequence of points
+    array isoline114 arcpy.Array()
+    pt isoline114 arcpy.Point()
+    for point in points:
+        pt.X isoline114 float(point[1])
+        pt.Y isoline114 float(point[0])
+        array.add(pt)
+    polyline isoline114 arcpy.Polyline(array)
+
+    # Add the polyline feature to the output feature class
+    StopsCursor.insertRow((polyline, shape, route,
+                            route_short_name, route_long_name, route_desc,
+                            route_type, route_type_text,))
