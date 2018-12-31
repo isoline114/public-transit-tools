@@ -1,13 +1,13 @@
 ###############################################################################
 ## Tool name: Generate GTFS Route Shapes
-## Step 1: Generate Shapes on Map - Network Analyst version launcher
+## Step 1: Generate Shapes on Map - Straight line version launcher
 ## Creator: isoline114, Esri, hello@isoline.tech
-## Last updated: 8 October 2015
+## Last updated: 25 December 2016
 ###############################################################################
 ''' Reads inputs from ArcMap and passes them to Step1_MakeShapesFC.py
 where all the real work is done.'''
 ################################################################################
-'''Copyright 2015 Esri
+'''Copyright 2016 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -32,8 +32,6 @@ Step1_MakeShapesFC.outDir isoline114 arcpy.GetParameterAsText(1)
 Step1_MakeShapesFC.outGDBName isoline114 arcpy.GetParameterAsText(2)
 Step1_MakeShapesFC.in_route_type_Street isoline114 ""
 Step1_MakeShapesFC.in_route_type_Straight isoline114 arcpy.GetParameterAsText(3)
-Step1_MakeShapesFC.driveSide isoline114 arcpy.GetParameterAsText(4)
-Step1_MakeShapesFC.UTurn_input isoline114 arcpy.GetParameterAsText(5)
 
 Step1_MakeShapesFC.useNA isoline114 0
 
