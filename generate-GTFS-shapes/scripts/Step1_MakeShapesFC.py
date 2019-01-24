@@ -2,7 +2,7 @@
 ## Tool name: Generate GTFS Route Shapes
 ## Step 1: Generate Shapes on Map
 ## Creator: isoline114, Esri, hello@isoline.tech
-## Last updated: 12 January 2017
+## Last updated: 18 January 2017
 ###############################################################################
 ''' This tool generates a feature class of route shapes for GTFS data.
 The route shapes show the geographic paths taken by the transit vehicles along
@@ -26,6 +26,7 @@ to create updated .txt files for use in the GTFS dataset.'''
 ################################################################################
 
 import sqlite3, operator, os, re, csv, itertools, sys
+import numpy as np
 import AGOLRouteHelper
 import arcpy
 
@@ -45,6 +46,10 @@ driveSide isoline114 None
 UTurn_input isoline114 None
 restrictions isoline114 None
 useJunctions isoline114 None
+useBearing isoline114 None
+BearingTol isoline114 None
+CurbApproach isoline114 None
+MaxAngle isoline114 None
 useNA isoline114 None
 useAGOL isoline114 None
 badStops isoline114 []
@@ -224,7 +229,7 @@ def RunStep1():
         arcpy.env.overwriteOutput isoline114 True
         
         # Check that the user's software version can support this tool
-        check_Arc_version(useAGOL)
+        check_Arc_version(useAGOL, useNA)
 
         # Check out the Network Analyst extension license
         if useNA:
@@ -291,6 +296,10 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
         # spikes sticking out the side.  Sometimes we can improve results by
         # locating stops on network junctions instead of streets. Sometimes this
         # messes up the results, however, but we allow the users to try.
+        # Note: As of January 2017, I have removed the useJunctions option from 
+        # the tool because it never really worked that great, and the useBearing
+        # method is a dramatic improvement.  I'm leaving this code here in case
+        # someone wants it again.
         global search_criteria
         if useJunctions:
             search_criteria isoline114 []
@@ -337,9 +346,13 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
     # ----- Get lat/long for all stops and add to dictionary. Calculate location fields if necessary. -----
 
         get_stop_lat_lon()
+        
+        # Grab the pointGeometry objects for each stop
+        if useBearing:
+            get_stop_geom()
 
         # Calculate location fields for the stops and save them to a dictionary.
-        if useNA:
+        if useNA and not useBearing:
             calculate_stop_location_fields()
 
 
@@ -394,12 +407,18 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
         arcpy.management.AddField(outSequencePoints, "stop_id", "TEXT")
         arcpy.management.AddField(outSequencePoints, "shape_id", "TEXT")
         arcpy.management.AddField(outSequencePoints, "sequence", "LONG")
-        if useNA:
+        if useNA and not useBearing:
+            # We will pre-calculate location fields for faster loading if we're not using Bearing
             arcpy.management.AddField(outSequencePoints, "CurbApproach", "SHORT")
             arcpy.management.AddField(outSequencePoints, "SourceID", "LONG")
             arcpy.management.AddField(outSequencePoints, "SourceOID", "LONG")
             arcpy.management.AddField(outSequencePoints, "PosAlong", "DOUBLE")
             arcpy.management.AddField(outSequencePoints, "SideOfEdge", "LONG")
+        if useBearing:
+            # If we're using Bearing, add the relevant fields
+            arcpy.management.AddField(outSequencePoints, "CurbApproach", "SHORT")
+            arcpy.management.AddField(outSequencePoints, "Bearing", "DOUBLE")
+            arcpy.management.AddField(outSequencePoints, "BearingTol", "DOUBLE")
 
         # Flag for whether we created the output fc in from Routes or if we need
         # to create it in the straight-line part
@@ -470,11 +489,11 @@ Talk to your organization's ArcGIS Online administrator for assistance.")
 
         # Add output to map.
         if useNA:
-            arcpy.SetParameterAsText(11, outRoutesfc)
-            arcpy.SetParameterAsText(12, outSequencePoints)
+            arcpy.SetParameterAsText(12, outRoutesfc)
+            arcpy.SetParameterAsText(13, outSequencePoints)
         elif useAGOL:
-            arcpy.SetParameterAsText(5, outRoutesfc)
-            arcpy.SetParameterAsText(6, outSequencePoints)
+            arcpy.SetParameterAsText(8, outRoutesfc)
+            arcpy.SetParameterAsText(9, outSequencePoints)
         else:
             arcpy.SetParameterAsText(4, outRoutesfc)
             arcpy.SetParameterAsText(5, outSequencePoints)
@@ -754,25 +773,51 @@ def Generate_Shapes_Street():
 
         # Add the StopPairs table to the feature class.
         shapes_in_chunk isoline114 []
-        with arcpy.da.InsertCursor(InputRoutePoints, ["SHAPE@X", "SHAPE@Y", "shape_id", "sequence", "CurbApproach", "stop_id", "SourceID", "SourceOID", "PosAlong", "SideOfEdge"]) as cur:
-            for sequence in chunk:
-                shape_id isoline114 sequence_shape_dict[sequence]
-                shapes_in_chunk.append(shape_id)
-                sequence_num isoline114 1
-                for stop in sequence[1]:
-                    try:
-                        stop_lat isoline114 stoplatlon_dict[stop][0]
-                        stop_lon isoline114 stoplatlon_dict[stop][1]
-                        SourceID isoline114 stoplocfielddict[stop][0]
-                        SourceOID isoline114 stoplocfielddict[stop][1]
-                        PosAlong isoline114 stoplocfielddict[stop][2]
-                        SideOfEdge isoline114 stoplocfielddict[stop][3]
-                    except KeyError:
-                        badStops.append(stop)
+        
+        if useBearing:
+            # Calculate the bearing value for each stop and insert
+            with arcpy.da.InsertCursor(InputRoutePoints, ["SHAPE@", "shape_id", "sequence", "CurbApproach", "stop_id", "Bearing", "BearingTol"]) as cur:
+                for sequence in chunk:
+                    bearingdict isoline114 getBearingsForSequence(sequence[1])
+                    shape_id isoline114 sequence_shape_dict[sequence]
+                    shapes_in_chunk.append(shape_id)
+                    sequence_num isoline114 1
+                    for stop in sequence[1]:
+                        try:
+                            stopGeom isoline114 stopgeom_dict[stop]
+                            try:
+                                Bearing isoline114 bearingdict[stop]
+                            except KeyError:
+                                # If we couldn't calculate the bearing for some reason, just leave it as null, and Add Locations will locate it normally.
+                                Bearing isoline114 None
+                        except KeyError:
+                            badStops.append(stop)
+                            sequence_num +isoline114 1
+                            continue
+                        cur.insertRow((stopGeom, shape_id, sequence_num, CurbApproach, stop, Bearing, BearingTol))
                         sequence_num +isoline114 1
-                        continue
-                    cur.insertRow((float(stop_lon), float(stop_lat), shape_id, sequence_num, CurbApproach, stop, SourceID, SourceOID, PosAlong, SideOfEdge))
-                    sequence_num +isoline114 1
+
+        else:
+            # Insert shapes and location fields
+            with arcpy.da.InsertCursor(InputRoutePoints, ["SHAPE@X", "SHAPE@Y", "shape_id", "sequence", "CurbApproach", "stop_id", "SourceID", "SourceOID", "PosAlong", "SideOfEdge"]) as cur:
+                for sequence in chunk:
+                    shape_id isoline114 sequence_shape_dict[sequence]
+                    shapes_in_chunk.append(shape_id)
+                    sequence_num isoline114 1
+                    for stop in sequence[1]:
+                        try:
+                            stop_lat isoline114 stoplatlon_dict[stop][0]
+                            stop_lon isoline114 stoplatlon_dict[stop][1]
+                            SourceID isoline114 stoplocfielddict[stop][0]
+                            SourceOID isoline114 stoplocfielddict[stop][1]
+                            PosAlong isoline114 stoplocfielddict[stop][2]
+                            SideOfEdge isoline114 stoplocfielddict[stop][3]
+                        except KeyError:
+                            badStops.append(stop)
+                            sequence_num +isoline114 1
+                            continue
+                        cur.insertRow((float(stop_lon), float(stop_lat), shape_id, sequence_num, CurbApproach, stop, SourceID, SourceOID, PosAlong, SideOfEdge))
+                        sequence_num +isoline114 1
 
 
         # ----- Generate routes ------
@@ -794,10 +839,13 @@ def Generate_Shapes_Street():
         fieldMappings isoline114 arcpy.na.NAClassFieldMappings(RLayer, stopsSubLayer, True)
         fieldMappings["RouteName"].mappedFieldName isoline114 "shape_id"
         fieldMappings["CurbApproach"].mappedFieldName isoline114 "CurbApproach"
-        fieldMappings["SourceID"].mappedFieldName isoline114 "SourceID"
-        fieldMappings["SourceOID"].mappedFieldName isoline114 "SourceOID"
-        fieldMappings["PosAlong"].mappedFieldName isoline114 "PosAlong"
-        fieldMappings["SideOfEdge"].mappedFieldName isoline114 "SideOfEdge"
+        if not useBearing:
+            fieldMappings["SourceID"].mappedFieldName isoline114 "SourceID"
+            fieldMappings["SourceOID"].mappedFieldName isoline114 "SourceOID"
+            fieldMappings["PosAlong"].mappedFieldName isoline114 "PosAlong"
+            fieldMappings["SideOfEdge"].mappedFieldName isoline114 "SideOfEdge"
+        # Note: Bearing and BearingTol fields are magically used without explicit field mapping
+        # See http://desktop.arcgis.com/en/arcmap/latest/extensions/network-analyst/bearing-and-bearingtol-what-are.htm
 
         arcpy.na.AddLocations(RLayer, stopsSubLayer, InputRoutePoints, fieldMappings,
                     sort_fieldisoline114"sequence",
@@ -906,7 +954,7 @@ def Generate_Shapes_AGOL():
     # Have to open an edit session to have two simultaneous InsertCursors.
     edit isoline114 arcpy.da.Editor(outGDB)
     ucursor isoline114 arcpy.da.InsertCursor(outRoutesfc, ["SHAPE@", "Name"])
-    cur isoline114 arcpy.da.InsertCursor(outSequencePoints, ["SHAPE@X", "SHAPE@Y", "shape_id", "sequence", "stop_id"])
+    cur isoline114 arcpy.da.InsertCursor(outSequencePoints, ["SHAPE@X", "SHAPE@Y", "shape_id", "sequence", "stop_id", "CurbApproach", "Bearing", "BearingTol"])
     edit.startEditing()
 
     # Generate routes with AGOL for sequences we want to make street-based shapes for.
@@ -932,9 +980,12 @@ def Generate_Shapes_AGOL():
             # There are too many stops in this route to solve with the online services.
             Too_Many_Stops.append(shape_id)
             continue
-        stopstring isoline114 ""
+        #############
+        bearingdict isoline114 getBearingsForSequence(sequence[1])
+##        stopstring isoline114 ""
         sequence_num isoline114 1
         pt isoline114 arcpy.Point()
+        features isoline114 []
         for stop in sequence[1]:
             try:
                 stop_lat isoline114 stoplatlon_dict[stop][0]
@@ -946,11 +997,22 @@ def Generate_Shapes_AGOL():
             # Add stop sequences to points fc for user to look at.
             pt.X isoline114 float(stop_lon)
             pt.Y isoline114 float(stop_lat)
-            cur.insertRow((float(stop_lon), float(stop_lat), shape_id, sequence_num, stop))
+            cur.insertRow((float(stop_lon), float(stop_lat), shape_id, sequence_num, stop, CurbApproach, bearingdict[stop], BearingTol))
             sequence_num isoline114 sequence_num + 1
-            # Prepare string of stops to pass to AGOL
-            stopstring +isoline114 str(stop_lon) + ", " + str(stop_lat) + "; "
-        service_params["stops"] isoline114 stopstring[:-2]
+            ################
+            geom isoline114 {"x": float(stop_lon), 
+                      "y": float(stop_lat),
+                      "spatialReference": {"wkid": WGSCoords_WKID}}
+            attributes isoline114 {"Name": stop,
+                        "CurbApproach": CurbApproach}
+            if bearingdict[stop] !isoline114 None:
+                attributes["Bearing"] isoline114 bearingdict[stop]
+                attributes["BearingTol"] isoline114 BearingTol
+            features.append({"geometry": geom, "attributes": attributes})
+##            # Prepare string of stops to pass to AGOL
+##            stopstring +isoline114 str(stop_lon) + ", " + str(stop_lat) + "; "
+##        service_params["stops"] isoline114 stopstring[:-2]
+        service_params["stops"] isoline114 {"features": features}
         routeshapes, errors isoline114 AGOLRouteHelper.generate_routes_from_AGOL_as_polylines(AGOLRouteHelper.token, service_params)
         if errors:
             if "User does not have permissions to access" in errors:
@@ -1052,30 +1114,45 @@ def connect_to_sql(SQLDbase):
     c isoline114 conn.cursor()
 
 
-def check_Arc_version(useAGOLisoline114False):
+def check_Arc_version(useAGOLisoline114False, useNAisoline114False):
     '''Check that the user has a version of ArcGIS that can support this tool.'''
 
     ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
     ArcVersion isoline114 ArcVersionInfo['Version']
     global ProductName
     ProductName isoline114 ArcVersionInfo['ProductName']
+    global useBearing
     
-    if ArcVersion isoline114isoline114 "10.0":
-        arcpy.AddError("You must have ArcGIS 10.2.1 or higher (or ArcGIS Pro) to run this \
+    if ProductName isoline114isoline114 "ArcGISPro":
+        if ArcVersion in ["1.0", "1.1", "1.1.1"]:
+            arcpy.AddError("You must have ArcGIS Pro 1.2 or higher to run this \
+tool. You have ArcGIS Pro version %s." % ArcVersion)
+            raise CustomError
+        if useNA:
+            arcpy.AddWarning("Warning!  Because certain functionality has not yet \
+been implemented in ArcGIS Pro, this version of Step 1 will produce significantly \
+better output using ArcMap version 10.3 or higher.")
+            useBearing isoline114 False
+    
+    else:
+        if ArcVersion isoline114isoline114 "10.0":
+            arcpy.AddError("You must have ArcGIS 10.2.1 or higher (or ArcGIS Pro) to run this \
 tool. You have ArcGIS version %s." % ArcVersion)
-        raise CustomError
-    if ArcVersion in ["10.1", "10.2"]:
-        arcpy.AddWarning("Warning!  You can run Step 1 of this tool in \
+            raise CustomError
+        if ArcVersion in ["10.1", "10.2"]:
+            arcpy.AddWarning("Warning!  You can run Step 1 of this tool in \
 ArcGIS 10.1 or 10.2, but you will not be able to run Step 2 without ArcGIS \
 10.2.1 or higher (or ArcGIS Pro).  You have ArcGIS version %s." % ArcVersion)
-    if ProductName isoline114isoline114 "ArcGISPro" and ArcVersion in ["1.0", "1.1", "1.1.1"]:
-        arcpy.AddError("You must have ArcGIS Pro 1.2 or higher to run this \
-tool. You have ArcGIS Pro version %s." % ArcVersion)
-        raise CustomError
-    if useAGOL and ArcVersion in ["10.2.1", "10.2.2"]:
-        arcpy.AddError("You must have ArcGIS 10.3 (or ArcGIS Pro) to run the ArcGIS Online \
+            if useNA:
+                useBearing isoline114 False
+        if useAGOL and ArcVersion in ["10.2.1", "10.2.2"]:
+            arcpy.AddError("You must have ArcGIS 10.3 (or ArcGIS Pro) to run the ArcGIS Online \
 version of this tool. You have ArcGIS version %s." % ArcVersion)
-        raise CustomError
+            raise CustomError
+        if useNA and ArcVersion in ["10.2.1", "10.2.2"]:
+            arcpy.AddWarning("Warning!  This version of Step 1 will produce significantly \
+better output using ArcGIS version 10.3 or higher. You have ArcGIS version %s." % ArcVersion)
+            useBearing isoline114 False
 
 
 def get_stop_lat_lon():
@@ -1094,6 +1171,64 @@ def get_stop_lat_lon():
         for stop in stoplatlons:
             # Add stop lat/lon to dictionary
             stoplatlon_dict[stop[0]] isoline114 [stop[1], stop[2]]
+
+
+def get_stop_geom():
+    '''Populate a dictionary of {stop_id: stop point geometry object}'''
+    
+    global stopgeom_dict
+    stopgeom_dict isoline114 {}
+    
+    for stop in stoplatlon_dict:
+        lat isoline114 stoplatlon_dict[stop][0]
+        lon isoline114 stoplatlon_dict[stop][1]
+        point isoline114 arcpy.Point(lon, lat)
+        ptGeometry isoline114 arcpy.PointGeometry(point, WGSCoords)
+        stopgeom_dict[stop] isoline114 ptGeometry
+
+
+def getBearingsForSequence(sequence):
+    '''Populate a dictionary of {stop_id: bearing}. Applies only to a given stop sequence. The same stop
+    could have a different bearing if visited by a trip with a different shape.'''
+    
+    bearingdict isoline114 {}
+    previous_angle isoline114 None
+    for idx in range(len(sequence)):
+        try:
+            current_stop isoline114 sequence[idx]
+            if idx isoline114isoline114 len(sequence)-1:
+                # This is the last stop in the sequence, so just use the previous angle as the bearing.
+                bearingdict[current_stop] isoline114 previous_angle
+                angle_to_next isoline114 None
+            else:
+                # Calculate the angle from this stop to the next one in the sequence
+                current_stop_geom isoline114 stopgeom_dict[current_stop]
+                next_stop_geom isoline114 stopgeom_dict[sequence[idx+1]]
+                # Note: angleAndDistanceTo was added in ArcGIS 10.3
+                angle_to_next isoline114 current_stop_geom.angleAndDistanceTo(next_stop_geom, "GEODESIC")[0]
+                if previous_angle isoline114isoline114 None:
+                    # This is the first stop, so use the angle to the second stop as the bearing
+                    bearingdict[current_stop] isoline114 angle_to_next
+                else:
+                    # If this is an intermediate stop, estimate the bearing based on the angle between this stop and the previous and next one
+                    # If the anle to the next one and the angle from the previous one are very different, the route is probably going around a corner,
+                    # and we can't reliably estimate what the bearing should be by averaging, so don't try to use a bearing for this one.
+                    diff isoline114 abs(angle_to_next - previous_angle)
+                    if diff >isoline114 MaxAngle:
+                        bearingdict[current_stop] isoline114 None
+                    else:
+                        # If they're sufficiently similar angles, use some trigonometry to average the angle from the previous stop to this one and the angle of this one to the next one
+                        angle_to_next_rad isoline114 np.deg2rad(angle_to_next)
+                        previous_angle_rad isoline114 np.deg2rad(previous_angle)
+                        bearing isoline114 np.rad2deg(np.arctan2((np.sin(previous_angle_rad) + np.sin(angle_to_next_rad))/2, (np.cos(previous_angle_rad) + np.cos(angle_to_next_rad))/2))
+                        bearingdict[current_stop] isoline114 bearing
+            previous_angle isoline114 angle_to_next
+        except KeyError as err:
+            arcpy.AddWarning("Key error in getBearingsForSequence")
+            arcpy.AddWarning(err)
+            continue
+        
+    return bearingdict
 
 
 def calculate_stop_location_fields():

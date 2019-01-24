@@ -2,12 +2,12 @@
 ## Tool name: Generate GTFS Route Shapes
 ## Step 1: Generate Shapes on Map - Network Analyst version launcher
 ## Creator: isoline114, Esri, hello@isoline.tech
-## Last updated: 8 October 2015
+## Last updated: 18 January 2017
 ###############################################################################
 ''' Reads inputs from ArcMap and passes them to Step1_MakeShapesFC.py
 where all the real work is done.'''
 ################################################################################
-'''Copyright 2015 Esri
+'''Copyright 2017 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -39,18 +39,14 @@ imp isoline114 arcpy.GetParameterAsText(6)
 # The input is formatted as "[Impedance] (Units: [Units])"
 implist isoline114 imp.split(" (")
 Step1_MakeShapesFC.impedanceAttribute isoline114 implist[0]
-
 Step1_MakeShapesFC.driveSide isoline114 arcpy.GetParameterAsText(7)
 Step1_MakeShapesFC.UTurn_input isoline114 arcpy.GetParameterAsText(8)
 Step1_MakeShapesFC.restrictions isoline114 arcpy.GetParameterAsText(9)
-useJunctionsText isoline114 arcpy.GetParameterAsText(10)
-if useJunctionsText isoline114isoline114 "false":
-    Step1_MakeShapesFC.useJunctions isoline114 0
-elif useJunctionsText isoline114isoline114 "true":
-    Step1_MakeShapesFC.useJunctions isoline114 1
+Step1_MakeShapesFC.BearingTol isoline114 float(arcpy.GetParameterAsText(10))
+Step1_MakeShapesFC.MaxAngle isoline114 float(arcpy.GetParameterAsText(11))
 
-
-Step1_MakeShapesFC.useNA isoline114 1
+Step1_MakeShapesFC.useNA isoline114 True
+Step1_MakeShapesFC.useBearing isoline114 True # Maybe be overridden later if ArcGIS version doesn't support this functionality
 
 # ----- Call the main Step 1 code and feed it the user input -----
 
