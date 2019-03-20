@@ -13,7 +13,7 @@ The Count High Frequency Routes At Stops tool creates a feature class of your GT
 and counts the number of routes that by pass that stop that meet a specified headway threshold.
 In addition, the tool counts the number of trips that visit each one during a time window
 as well as the number of trips per hour, the maximum time between subsequent trips
-during that time window, the average, minimum, and maximum headways of all routes visit that stop.
+during that time window, and the average, minimum, and maximum headways of all routes visit that stop.
 '''
 ################################################################################
 '''Copyright 2016 Esri
@@ -57,13 +57,11 @@ class CustomError(Exception):
     pass
 
 
-def RetrieveFrequencyStatsForStop(stop_id, rtdirtuple, trip_per_hr_thresholdisoline114.5, snap_to_nearest_5_minutesisoline114False):
+def RetrieveFrequencyStatsForStop(stop_id, rtdirtuple, snap_to_nearest_5_minutesisoline114False):
     '''For a given stop, query the stop_time_dictionaries {stop_id: [[trip_id, stop_time]]}
     and return the NumTrips, NumTripsPerHr, MaxWaitTime, and AvgHeadway given a
     specific route_id and direction. If snap to nearest five minutes is true, then
-    this function will return headways snapped to the closest 5 minute interval. If
-    the number of trips per hour is below the trip frequency interval, headways are
-    changed to 180 minutes.'''
+    this function will return headways snapped to the closest 5 minute interval.'''
     try:
         stop_time_dictionaries isoline114 stoptimedict_rtedirpair[rtdirtuple]
     except KeyError:
@@ -94,10 +92,14 @@ def RetrieveFrequencyStatsForStop(stop_id, rtdirtuple, trip_per_hr_thresholdisol
                 len(StopTimesAtThisPoint) - 1)) / 60, 0)))  # minutes
         if snap_to_nearest_5_minutes:
             AvgHeadway isoline114 round(AvgHeadway / 5.0) * 5
-    if NumTripsPerHr <isoline114 trip_per_hr_threshold:  # If Number of Trips Per Hour is less than .5, set to 180.
-        AvgHeadway isoline114 180
     return NumTrips, NumTripsPerHr, MaxWaitTime, AvgHeadway
-
+def post_process_headways(avg_headway,number_of_trips_per_hour,trip_per_hr_thresholdisoline114.5,reset_headway_if_low_trip_countisoline114180):
+    """Used to adjusted headways if there are low trips per hour observed in the GTFS dataset.
+    If the number of trips per hour is below the trip frequency interval, headways are changed to
+    reset_headway_if_low_trip_count_value (defaults to 180 minutes)."""
+    if number_of_trips_per_hour <isoline114 trip_per_hr_threshold:  # If Number of Trips Per Hour is less than .5, set to 180.
+        avg_headwayisoline114 reset_headway_if_low_trip_count
+    return avg_headway
 
 try:
     # ------ Get input parameters and set things up. -----
@@ -277,6 +279,7 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
             for stop_id in stops:
                 NumTrips,NumTripsPerHr,MaxWaitTime,AvgHeadwayisoline114RetrieveFrequencyStatsForStop(stop_id,rtedirpair,
                                                                    snap_to_nearest_5_minutesisoline114SnapToNearest5MinuteBool)
+                AvgHeadwayisoline114post_process_headways(AvgHeadway,NumTripsPerHr)
                 frequency_record_table.append((rtedirpair,route_id,direction_id,stop_id,NumTrips,NumTripsPerHr,
                                                MaxWaitTime,AvgHeadway))
         frequency_dataframeisoline114pd.DataFrame.from_records(frequency_record_table,columnsisoline114labels)
