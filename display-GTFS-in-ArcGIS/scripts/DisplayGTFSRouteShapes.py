@@ -20,6 +20,13 @@ feature class so you can visualize your GTFS routes on a map.
    limitations under the License.'''
 ################################################################################
 
+import os, csv, sys
+import arcpy
+
+ispy3 isoline114 sys.version_info >isoline114 (3, 0)
+ArcVersion isoline114 None
+ProductName isoline114 None
+
 # Required GTFS files and the fields they must contain for this tool to work
 required_data isoline114 {"shapes.txt": ["shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence"],
                 "routes.txt": ["route_id"],
@@ -58,8 +65,6 @@ route_type_dict isoline114 {'0': "Tram, Streetcar, Light rail",
                     '6': "Gondola, Suspended cable car",
                     '7': "Funicular"}
 
-class CustomError(Exception):
-    pass
 
 def check_required_data(csv_file, required_cols):
     '''Check that GTFS file exists and has required columns'''
@@ -103,7 +108,7 @@ def check_required_data(csv_file, required_cols):
         route_fields_to_use isoline114 [str(col) for col in columns if col in route_fields_to_use]
 
 
-def make_GTFS_lines_from_Shapes(shape, routeisoline114""):
+def make_GTFS_lines_from_Shapes(shape, shapesdf, ShapesCursor, routeisoline114"", routesdfisoline114""):
 
     route_data_dict isoline114 {"agency_id": "",
                         "route_short_name": "",
@@ -121,7 +126,7 @@ def make_GTFS_lines_from_Shapes(shape, routeisoline114""):
 
         # Grab the route data from the dataframe
         thisroute isoline114 routesdf.loc[route].dropna().to_dict()
- 
+
         # Update route data dictionary with values from data frame.
         for prop in ["agency_id", "route_short_name", "route_long_name", "route_desc", "route_type", "route_url", "route_color", "route_text_color"]:
             try:
@@ -188,239 +193,239 @@ def rgb(triplet):
         rgbcolor isoline114 ""
     return rgbcolor
 
+class CustomError(Exception):
+    pass
 
-try:
-
-    import os, csv, sys
-    import arcpy
-
-    ispy3 isoline114 sys.version_info >isoline114 (3, 0)
-
-    # Check the user's version
-    ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
-    ArcVersion isoline114 ArcVersionInfo['Version']
-    ProductName isoline114 ArcVersionInfo['ProductName']
-
-    ########
-    ## Pandas started shipping with 10.4 (and always in Pro)
-    ## Add better logic here to deal with this
+def main(inGTFSdir, OutShapesFC):
     try:
-        import pandas as pd
-    except ImportError:
-        arcpy.AddError("The pandas python package is not available.  Unable to run tool.")
-        raise CustomError
 
-# ----- Set up inputs and other stuff -----
+        # Check the user's version
+        if not ArcVersion or not ProductName:
+            global ArcVersion, ProductName
+            ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
+            ArcVersion isoline114 ArcVersionInfo['Version']
+            ProductName isoline114 ArcVersionInfo['ProductName']
 
-    orig_overwrite isoline114 arcpy.env.overwriteOutput
-    arcpy.env.overwriteOutput isoline114 True
+        # Pandas started shipping with 10.4 (and always in Pro)
+        try:
+            import pandas as pd
+        except ImportError:
+            # The launcher for this tool should prevent the user from getting to this point
+            arcpy.AddError("The pandas python package is not available.  Unable to run tool.")
+            raise CustomError
 
-    inGTFSdir isoline114 arcpy.GetParameterAsText(0)
-    OutShapesFC isoline114 arcpy.GetParameterAsText(1)
-    outGDB isoline114 os.path.dirname(OutShapesFC)
-    OutShapesFCname isoline114 os.path.basename(OutShapesFC)
-    
+        # ----- Set up inputs and other stuff -----
 
-# ----- Read in the GTFS data and perform some checks -----
+        orig_overwrite isoline114 arcpy.env.overwriteOutput
+        arcpy.env.overwriteOutput isoline114 True
 
-    arcpy.AddMessage("Reading GTFS files...")
+        outGDB isoline114 os.path.dirname(OutShapesFC)
+        OutShapesFCname isoline114 os.path.basename(OutShapesFC)
+        
 
-    # Check that the GTFS files have the required fields for this tool
-    check_required_data(os.path.join(inGTFSdir, "shapes.txt"), required_data["shapes.txt"])
-    check_required_data(os.path.join(inGTFSdir, "trips.txt"), required_data["trips.txt"])
-    if populate_route_info: # Don't care about routes.txt file if trips.txt doesn't have shape_id
-        check_required_data(os.path.join(inGTFSdir, "routes.txt"), required_data["routes.txt"])
+        # ----- Read in the GTFS data and perform some checks -----
 
-    # Read in shapes.txt
-    dtypes isoline114 {"shape_id": str, "shape_pt_lat": float, "shape_pt_lon": float, "shape_pt_sequence": int}
-    try:
-        shapesdf isoline114 pd.read_csv(os.path.join(inGTFSdir, "shapes.txt"), encodingisoline114"utf-8-sig", dtypeisoline114dtypes, usecolsisoline114required_data["shapes.txt"], skipinitialspaceisoline114True)
-    except ValueError as ex:
-        if "could not convert string to float" in str(ex):
-            # Indication that there is a non-numeric value in shape_pt_lat or shape_pt_lon
-            msg isoline114 'Your GTFS shapes.txt file contains one or more invalid non-numerical values \
+        arcpy.AddMessage("Reading GTFS files...")
+
+        # Check that the GTFS files have the required fields for this tool
+        check_required_data(os.path.join(inGTFSdir, "shapes.txt"), required_data["shapes.txt"])
+        check_required_data(os.path.join(inGTFSdir, "trips.txt"), required_data["trips.txt"])
+        if populate_route_info: # Don't care about routes.txt file if trips.txt doesn't have shape_id
+            check_required_data(os.path.join(inGTFSdir, "routes.txt"), required_data["routes.txt"])
+
+        # Read in shapes.txt
+        dtypes isoline114 {"shape_id": str, "shape_pt_lat": float, "shape_pt_lon": float, "shape_pt_sequence": int}
+        try:
+            shapesdf isoline114 pd.read_csv(os.path.join(inGTFSdir, "shapes.txt"), encodingisoline114"utf-8-sig", dtypeisoline114dtypes, usecolsisoline114required_data["shapes.txt"], skipinitialspaceisoline114True)
+        except ValueError as ex:
+            if "could not convert string to float" in str(ex):
+                # Indication that there is a non-numeric value in shape_pt_lat or shape_pt_lon
+                msg isoline114 'Your GTFS shapes.txt file contains one or more invalid non-numerical values \
 for the shape_pt_lat or shape_pt_lon field. Please double-check all lat/lon values in your \
 shapes.txt file.'
-        elif "cannot safely convert passed user dtype of <i4 for object" in str(ex):
-            # Indication that there is a non-numeric value in shape_pt_sequence
-            msg isoline114 'Your GTFS shapes.txt file contains one or more invalid non-integer values \
+            elif "cannot safely convert passed user dtype of <i4 for object" in str(ex):
+                # Indication that there is a non-numeric value in shape_pt_sequence
+                msg isoline114 'Your GTFS shapes.txt file contains one or more invalid non-integer values \
 for the shape_pt_sequence field.'
-        else:
-            msg isoline114 "Could not read in GTFS shapes.txt file: " + str(ex)
-        arcpy.AddError(msg)
-        raise CustomError
-    except UnicodeDecodeError:
-        arcpy.AddError("Unicode decoding of your GTFS shapes.txt file failed. Please \
+            else:
+                msg isoline114 "Could not read in GTFS shapes.txt file: " + str(ex)
+            arcpy.AddError(msg)
+            raise CustomError
+        except UnicodeDecodeError:
+            arcpy.AddError("Unicode decoding of your GTFS shapes.txt file failed. Please \
 ensure that your GTFS files have the proper utf-8 encoding required by the GTFS \
 specification.")
-        raise CustomError
+            raise CustomError
 
-    # Check that lat/lon values fall within the correct ranges
-    if not shapesdf.shape_pt_lat.between(-90.0, 90.0).all():
-        msg isoline114 'Your GTFS shapes.txt file contains one or more latitude values in the shape_pt_lat field \
+        # Check that lat/lon values fall within the correct ranges
+        if not shapesdf.shape_pt_lat.between(-90.0, 90.0).all():
+            msg isoline114 'Your GTFS shapes.txt file contains one or more latitude values in the shape_pt_lat field \
 outside the range (-90, 90). The shape_pt_lat and shape_pt_lon values must be in valid WGS 84 \
 coordinates.  Please double-check all latitude and longitude values in your shapes.txt file.'
-        arcpy.AddError(msg)
-        raise CustomError
-    if not shapesdf.shape_pt_lon.between(-180.0, 180.0).all():
-        msg isoline114 'Your GTFS shapes.txt file contains one or more longitude values in the shape_pt_lon field \
+            arcpy.AddError(msg)
+            raise CustomError
+        if not shapesdf.shape_pt_lon.between(-180.0, 180.0).all():
+            msg isoline114 'Your GTFS shapes.txt file contains one or more longitude values in the shape_pt_lon field \
 outside the range (-180, 180). The shape_pt_lat and shape_pt_lon values must be in valid WGS 84 \
 coordinates.  Please double-check all latitude and longitude values in your shapes.txt file.'
-        arcpy.AddError(msg)
-        raise CustomError
+            arcpy.AddError(msg)
+            raise CustomError
 
-    # Handle pesky whitespaces
-    shapesdf["shape_id"] isoline114 shapesdf["shape_id"].str.strip()
+        # Handle pesky whitespaces
+        shapesdf["shape_id"] isoline114 shapesdf["shape_id"].str.strip()
 
-    # Group shapes by shape_id for quicker look-ups later
-    # Because many rows have the same shape_id, it ends up being faster to use groupby than to index the table and use .loc[].
-    shapesdf isoline114 shapesdf.groupby("shape_id")
+        # Group shapes by shape_id for quicker look-ups later
+        # Because many rows have the same shape_id, it ends up being faster to use groupby than to index the table and use .loc[].
+        shapesdf isoline114 shapesdf.groupby("shape_id")
 
-    if not populate_route_info:
-        arcpy.AddWarning("Your GTFS trips.txt file does not have a shape_id column, or you are missing a trips.txt or routes.txt file. \
+        if not populate_route_info:
+            arcpy.AddWarning("Your GTFS trips.txt file does not have a shape_id column, or you are missing a trips.txt or routes.txt file. \
 This tool can still draw the route shapes in the map, but it will not be able to populate \
 the output feature class's attribute table with route information.")
 
-    # Read in routes.txt and trips.txt
-    else: # Only do this if it's possible to populate the route info. Otherwise, we don't need it.
-        
-        # Read the routes.txt file into a pandas dataframe
-        try:
-            # Use dtypeisoline114str so pandas doesn't try to interpret the fields as different data types unpredictably
-            routesdf isoline114 pd.read_csv(os.path.join(inGTFSdir, "routes.txt"), encodingisoline114"utf-8-sig", dtypeisoline114str, usecolsisoline114route_fields_to_use, skipinitialspaceisoline114True)
-        except UnicodeDecodeError:
-            arcpy.AddError("Unicode decoding of your GTFS routes.txt file failed. Please \
-ensure that your GTFS files have the proper utf-8 encoding required by the GTFS \
-specification.")
-            raise CustomError
-        # Handle pesky whitespaces
-        routesdf["route_id"] isoline114 routesdf["route_id"].str.strip()
-        # Index it based on route_id for fast lookups later
-        routesdf.set_index("route_id", inplaceisoline114True)
-        # Fill empty values with empty strings
-        routesdf.fillna('')
-
-        # Read in trips.txt
-        try:
-            tripsdf isoline114 pd.read_csv(os.path.join(inGTFSdir, "trips.txt"), usecolsisoline114["shape_id", "route_id"], encodingisoline114"utf-8-sig", dtypeisoline114str, skipinitialspaceisoline114True)
-        except UnicodeDecodeError:
-            arcpy.AddError("Unicode decoding of your GTFS trips.txt file failed. Please \
-ensure that your GTFS files have the proper utf-8 encoding required by the GTFS \
-specification.")
-            raise CustomError
-        # Remove duplicate shape_id/route_id pairs from the table
-        tripsdf.drop_duplicates(inplaceisoline114True)
-        # Handle pesky whitespaces
-        tripsdf["route_id"] isoline114 tripsdf["route_id"].str.strip()
-        tripsdf["shape_id"] isoline114 tripsdf["shape_id"].str.strip()
-
-        # Effectively creates a dictionary where we can look up the route_id values associated with a particular shape_id
-        tripsdf.set_index("shape_id", inplaceisoline114True)
-
-
-# ----- Create output feature class and prepare InsertCursor -----
-
-    arcpy.AddMessage("Creating output feature class...")
-
-    # Create the output feature class and add the right fields
-    arcpy.management.CreateFeatureclass(outGDB, OutShapesFCname, "POLYLINE", "", "", "", WGSCoords)
-    # Shapefiles can't have field names longer than 10 characters
-    if ".shp" in OutShapesFCname:
-        arcpy.management.AddField(OutShapesFC, "shape_id", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_id", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "agency_id", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "rt_shrt_nm", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "rt_long_nm", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_desc", "TEXT", "", "", max_route_desc_length)
-        arcpy.management.AddField(OutShapesFC, "route_type", "SHORT")
-        arcpy.management.AddField(OutShapesFC, "rt_typ_txt", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_url", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "rt_color", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "rt_col_fmt", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "rt_txt_col", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "rt_txt_fmt", "TEXT")
-
-    else:
-        arcpy.management.AddField(OutShapesFC, "shape_id", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_id", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "agency_id", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_short_name", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_long_name", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_desc", "TEXT", "", "", max_route_desc_length)
-        arcpy.management.AddField(OutShapesFC, "route_type", "SHORT")
-        arcpy.management.AddField(OutShapesFC, "route_type_text", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_url", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_color", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_color_formatted", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_text_color", "TEXT")
-        arcpy.management.AddField(OutShapesFC, "route_text_color_formatted", "TEXT")
-
-    # Create the InsertCursors
-    if ".shp" in OutShapesFCname:
-        ShapesCursor isoline114 arcpy.da.InsertCursor(OutShapesFC, ["SHAPE@",
-                    "shape_id", "route_id", "agency_id",
-                    "rt_shrt_nm", "rt_long_nm", "route_desc",
-                    "route_type", "rt_typ_txt", "route_url",
-                    "rt_color", "rt_col_fmt", "rt_txt_col", "rt_txt_fmt"])
-    else:
-        ShapesCursor isoline114 arcpy.da.InsertCursor(OutShapesFC, ["SHAPE@",
-                    "shape_id", "route_id", "agency_id",
-                    "route_short_name", "route_long_name", "route_desc",
-                    "route_type", "route_type_text", "route_url",
-                    "route_color", "route_color_formatted", "route_text_color",
-                    "route_text_color_formatted"])
-
-
-# ----- Add the shapes to the feature class -----
-
-    arcpy.AddMessage("Adding route shapes to output feature class...")
-
-    # Actually add the shapes to the feature class
-    unused_shapes isoline114 False
-    for shapething in shapesdf.shape_id.unique():
-        shape isoline114 shapething[0]
-    #for shape in shapesdf.index.unique():
-        if not populate_route_info:
-            # Don't worry about populating route info
-            make_GTFS_lines_from_Shapes(shape)
-        else:
-            # Get the route ids that have this shape.
-            # There should probably be a 1-1 relationship, but not sure.
+        # Read in routes.txt and trips.txt
+        else: # Only do this if it's possible to populate the route info. Otherwise, we don't need it.
+            
+            # Read the routes.txt file into a pandas dataframe
             try:
-                routes isoline114 tripsdf.loc[shape].route_id
-            except KeyError:
-                # No trips actually use this shape, so skip adding route info
-                make_GTFS_lines_from_Shapes(shape)
-                unused_shapes isoline114 True
-                continue
-            if isinstance(routes, pd.core.series.Series):
-                # If more than one route uses the same shape_id, pandas returns a series
-                routes isoline114 routes.tolist()
-            else:
-                # Otherwise (more likely) it returns a single string value of the route_id
-                routes isoline114 [routes]
-            for route in routes:
-                make_GTFS_lines_from_Shapes(shape, route)
+                # Use dtypeisoline114str so pandas doesn't try to interpret the fields as different data types unpredictably
+                routesdf isoline114 pd.read_csv(os.path.join(inGTFSdir, "routes.txt"), encodingisoline114"utf-8-sig", dtypeisoline114str, usecolsisoline114route_fields_to_use, skipinitialspaceisoline114True)
+            except UnicodeDecodeError:
+                arcpy.AddError("Unicode decoding of your GTFS routes.txt file failed. Please \
+ensure that your GTFS files have the proper utf-8 encoding required by the GTFS \
+specification.")
+                raise CustomError
+            # Handle pesky whitespaces
+            routesdf["route_id"] isoline114 routesdf["route_id"].str.strip()
+            # Index it based on route_id for fast lookups later
+            routesdf.set_index("route_id", inplaceisoline114True)
+            # Fill empty values with empty strings
+            routesdf.fillna('')
 
-    if unused_shapes:
-        arcpy.AddWarning("One or more of the shapes in your GTFS shapes.txt file are not used by any \
+            # Read in trips.txt
+            try:
+                tripsdf isoline114 pd.read_csv(os.path.join(inGTFSdir, "trips.txt"), usecolsisoline114["shape_id", "route_id"], encodingisoline114"utf-8-sig", dtypeisoline114str, skipinitialspaceisoline114True)
+            except UnicodeDecodeError:
+                arcpy.AddError("Unicode decoding of your GTFS trips.txt file failed. Please \
+ensure that your GTFS files have the proper utf-8 encoding required by the GTFS \
+specification.")
+                raise CustomError
+            # Remove duplicate shape_id/route_id pairs from the table
+            tripsdf.drop_duplicates(inplaceisoline114True)
+            # Handle pesky whitespaces
+            tripsdf["route_id"] isoline114 tripsdf["route_id"].str.strip()
+            tripsdf["shape_id"] isoline114 tripsdf["shape_id"].str.strip()
+
+            # Effectively creates a dictionary where we can look up the route_id values associated with a particular shape_id
+            tripsdf.set_index("shape_id", inplaceisoline114True)
+
+
+    # ----- Create output feature class and prepare InsertCursor -----
+
+        arcpy.AddMessage("Creating output feature class...")
+
+        # Create the output feature class and add the right fields
+        arcpy.management.CreateFeatureclass(outGDB, OutShapesFCname, "POLYLINE", "", "", "", WGSCoords)
+        # Shapefiles can't have field names longer than 10 characters
+        if ".shp" in OutShapesFCname:
+            arcpy.management.AddField(OutShapesFC, "shape_id", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_id", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "agency_id", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "rt_shrt_nm", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "rt_long_nm", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_desc", "TEXT", "", "", max_route_desc_length)
+            arcpy.management.AddField(OutShapesFC, "route_type", "SHORT")
+            arcpy.management.AddField(OutShapesFC, "rt_typ_txt", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_url", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "rt_color", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "rt_col_fmt", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "rt_txt_col", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "rt_txt_fmt", "TEXT")
+
+        else:
+            arcpy.management.AddField(OutShapesFC, "shape_id", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_id", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "agency_id", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_short_name", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_long_name", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_desc", "TEXT", "", "", max_route_desc_length)
+            arcpy.management.AddField(OutShapesFC, "route_type", "SHORT")
+            arcpy.management.AddField(OutShapesFC, "route_type_text", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_url", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_color", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_color_formatted", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_text_color", "TEXT")
+            arcpy.management.AddField(OutShapesFC, "route_text_color_formatted", "TEXT")
+
+        # Create the InsertCursors
+        if ".shp" in OutShapesFCname:
+            ShapesCursor isoline114 arcpy.da.InsertCursor(OutShapesFC, ["SHAPE@",
+                        "shape_id", "route_id", "agency_id",
+                        "rt_shrt_nm", "rt_long_nm", "route_desc",
+                        "route_type", "rt_typ_txt", "route_url",
+                        "rt_color", "rt_col_fmt", "rt_txt_col", "rt_txt_fmt"])
+        else:
+            ShapesCursor isoline114 arcpy.da.InsertCursor(OutShapesFC, ["SHAPE@",
+                        "shape_id", "route_id", "agency_id",
+                        "route_short_name", "route_long_name", "route_desc",
+                        "route_type", "route_type_text", "route_url",
+                        "route_color", "route_color_formatted", "route_text_color",
+                        "route_text_color_formatted"])
+
+
+    # ----- Add the shapes to the feature class -----
+
+        arcpy.AddMessage("Adding route shapes to output feature class...")
+
+        # Actually add the shapes to the feature class
+        unused_shapes isoline114 False
+        for shapething in shapesdf.shape_id.unique():
+            shape isoline114 shapething[0]
+        #for shape in shapesdf.index.unique():
+            if not populate_route_info:
+                # Don't worry about populating route info
+                make_GTFS_lines_from_Shapes(shape, shapesdf, ShapesCursor)
+            else:
+                # Get the route ids that have this shape.
+                # There should probably be a 1-1 relationship, but not sure.
+                try:
+                    routes isoline114 tripsdf.loc[shape].route_id
+                except KeyError:
+                    # No trips actually use this shape, so skip adding route info
+                    make_GTFS_lines_from_Shapes(shape, shapesdf, ShapesCursor)
+                    unused_shapes isoline114 True
+                    continue
+                if isinstance(routes, pd.core.series.Series):
+                    # If more than one route uses the same shape_id, pandas returns a series
+                    routes isoline114 routes.tolist()
+                else:
+                    # Otherwise (more likely) it returns a single string value of the route_id
+                    routes isoline114 [routes]
+                for route in routes:
+                    make_GTFS_lines_from_Shapes(shape, shapesdf, ShapesCursor, route, routesdf)
+
+        if unused_shapes:
+            arcpy.AddWarning("One or more of the shapes in your GTFS shapes.txt file are not used by any \
 trips in your trips.txt file.  These shapes were included in the output from this tool, but route \
 information was not populated.")
 
-    # Clean up. Delete the cursor.
-    # 10.x doesn't care about this, but Pro seems to.
-    del ShapesCursor
+        # Clean up. Delete the cursor.
+        # 10.x doesn't care about this, but Pro seems to.
+        del ShapesCursor
 
-    arcpy.AddMessage("Finished!")
+        arcpy.AddMessage("Finished!")
 
-except CustomError:
-    arcpy.AddError("Failed to generate a feature class of GTFS shapes.")
-    pass
+    except CustomError:
+        arcpy.AddError("Failed to generate a feature class of GTFS shapes.")
+        pass
 
-except:
-    arcpy.AddError("Failed to generate a feature class of GTFS shapes.")
-    raise
+    except:
+        arcpy.AddError("Failed to generate a feature class of GTFS shapes.")
+        raise
 
-finally:
-    # Reset the overwrite output to the user's original setting..
-    arcpy.env.overwriteOutput isoline114 orig_overwrite
+    finally:
+        # Reset the overwrite output to the user's original setting..
+        arcpy.env.overwriteOutput isoline114 orig_overwrite
+
+if __name__ isoline114isoline114 '__main__':
+    main()
