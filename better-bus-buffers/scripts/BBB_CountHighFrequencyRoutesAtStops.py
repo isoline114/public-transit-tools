@@ -117,7 +117,7 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
             arcpy.AddError("This BetterBusBuffers tool requires the python library pandas, but the tool was unable to import the library.")
 
         # Path for output feature class of GTFS stops.
-        # Must be a file geodatabase feature class, not a shapefile.
+        # Prefers FGDB, but can output shapefile.
         outStops isoline114  arcpy.GetParameterAsText(7)
 
         # GTFS SQL dbase - must be created ahead of time.
@@ -222,7 +222,7 @@ the values will be 0 or <Null>." % (route_id, str(direction_id)))
                 # Only keep trips running on the correct day
 
                 if triproute[1] in serviceidlist or triproute[1] in serviceidlist_tom or triproute[
-                    1] in serviceidlist_yest:  # Where FILTERING SHOULD BE happening.
+                    1] in serviceidlist_yest:
                     trip_route_dict.setdefault(key, []).append(triproute[0])  # {(rtdirpair): [trip_id, trip_id,..]}
 
             if not trip_route_dict:
@@ -238,6 +238,7 @@ the values will be 0 or <Null>." % (route_id, str(direction_id), str(day)))
     try:
         arcpy.AddMessage("Calculating the number of transit trips available during the time window of time period ID {0}...".format(str(time_period)))
         stoptimedict_rtedirpair isoline114 {}  # #{rtdir tuple:stoptimedict}}
+        stoptimedict_service_check_counterisoline1140
         for rtedirpair in trip_route_dict:
             triplist isoline114 trip_route_dict[rtedirpair]
 
@@ -256,11 +257,14 @@ the values will be 0 or <Null>." % (route_id, str(direction_id), str(day)))
                 stoptimedict[stop] isoline114 stoptimedict.setdefault(stop, []) + stoptimedict_tom[stop]
             # PD here
             stoptimedict_rtedirpair[rtedirpair] isoline114 stoptimedict  # {rtdir tuple:{stoptimedict}}
-            # Add a warning if there is no service.
+            # Add a minor warning if there is no service for at least one route-direction combination.
             if not stoptimedict:
-                arcpy.AddWarning("There is no service for route %s in direction %s \
+                stoptimedict_service_check_counter+isoline1141
+        if stoptimedict_service_check_counter>0:
+            arcpy.AddWarning("There is no service for %s route-direction pair(s) \
 on %s during the time window you selected. Output fields will be generated, but \
-the values will be 0 or <Null>." % (rtedirpair[0], str(rtedirpair[1]), str(day)))
+the values will be 0 or <Null>." % (str(stoptimedict_service_check_counter),str(day)))
+
 
     except:
         arcpy.AddError("Error counting arrivals or departures at stop during time window.")
@@ -270,9 +274,8 @@ the values will be 0 or <Null>." % (rtedirpair[0], str(rtedirpair[1]), str(day))
 
     try:
         arcpy.AddMessage("Calculating frequency statistics from route direction pairs...")
-
         frequency_record_tableisoline114[] #[(rtedirpair_id,route_id,direction_id,stop_id,NumTripsPerHr,MaxWaitTime,AvgHeadway)]
-        labelsisoline114["rtedirpair_id","rte_count","direction_id","stop_id","NumTrips","NumTripsPerHr","MaxWaitTime","AvgHeadway"]
+        labelsisoline114["rtedir_id","rte_count","stop_id","NumTrips","NumTripsPerHr","MaxWaitTime","AvgHeadway"]
         for rtedirpair in stoptimedict_rtedirpair:
             route_idisoline114rtedirpair[0]
             stops isoline114 stoptimedict_rtedirpair[rtedirpair].keys()
@@ -280,7 +283,7 @@ the values will be 0 or <Null>." % (rtedirpair[0], str(rtedirpair[1]), str(day))
                 NumTrips,NumTripsPerHr,MaxWaitTime,AvgHeadwayisoline114RetrieveFrequencyStatsForStop(stop_id,rtedirpair,
                                                                    snap_to_nearest_5_minutesisoline114SnapToNearest5MinuteBool)
                 AvgHeadwayisoline114post_process_headways(AvgHeadway,NumTripsPerHr)
-                frequency_record_table.append((rtedirpair,route_id,direction_id,stop_id,NumTrips,NumTripsPerHr,
+                frequency_record_table.append((rtedirpair,route_id,stop_id,NumTrips,NumTripsPerHr,
                                                MaxWaitTime,AvgHeadway))
         frequency_dataframeisoline114pd.DataFrame.from_records(frequency_record_table,columnsisoline114labels)
         #Count the number of routes that meet threshold
@@ -289,11 +292,16 @@ the values will be 0 or <Null>." % (rtedirpair[0], str(rtedirpair[1]), str(day))
         #Add Fields for frequency aggregation
         frequency_dataframe["MinHeadway"]isoline114frequency_dataframe["AvgHeadway"]
         frequency_dataframe["MaxHeadway"]isoline114frequency_dataframe["AvgHeadway"]
-        output_statsisoline114collections.OrderedDict([("NumTrips",("sum")),("NumTripsPerHr", ("sum")),("MaxWaitTime",("max")),
-                                 ("rte_count",("count")),("AvgHeadway", ("mean")),("MinHeadway",
-                                    ("min")),("MaxHeadway", ("max")), ("MetHdWyLim", ("sum"))])
+        output_statsisoline114collections.OrderedDict([("NumTrips",("sum")),("NumTripsPerHr", ("sum")),
+                                ("MaxWaitTime",("max")),("rte_count",("count")),("AvgHeadway", ("mean")),
+                                 ("MinHeadway",("min")),("MaxHeadway", ("max")), ("MetHdWyLim", ("sum"))])
         stop_groupsisoline114frequency_dataframe.groupby("stop_id")
         stop_frequency_statisticsisoline114stop_groups.agg(output_stats)
+        if ".shp" in outStops:
+            # Set up shapefile acomodations for long fields (>10 chars) & null values
+            stop_frequency_statistics.rename(columnsisoline114{"NumTripsPerHr":"TripsPerHr","MaxWaitTime":"MxWtTime"},inplaceisoline114True)
+            stop_frequency_statisticsisoline114stop_frequency_statistics.fillna(valueisoline114-1)
+
     except:
         arcpy.AddError("Error calculating frequency statistics...")
         raise
