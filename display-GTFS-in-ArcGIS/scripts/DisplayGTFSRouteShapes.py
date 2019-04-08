@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Display GTFS in ArcGIS
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 1 April 2017
+## Last updated: 3 April 2017
 ############################################################################
 ''' Display GTFS Route Shapes
 Display GTFS Route Shapes converts GTFS route and shape data into an ArcGIS
@@ -22,6 +22,9 @@ feature class so you can visualize your GTFS routes on a map.
 
 import os, csv, sys
 import arcpy
+# Pandas started shipping with 10.4 (and always in Pro).
+# Tool will fail if pandas isn't available, but launcher script should prevent us from getting this far.
+import pandas as pd
 
 ispy3 isoline114 sys.version_info >isoline114 (3, 0)
 ArcVersion isoline114 None
@@ -159,8 +162,12 @@ def make_GTFS_lines_from_Shapes(shape, shapesdf, ShapesCursor, routeisoline114""
                 route_data_dict["route_text_color_formatted"] isoline114 rgb(route_data_dict["route_text_color"])
 
     # Fetch the shape points for this shape.
-    thisshapedf isoline114 shapesdf.get_group(shape).sort_values(byisoline114"shape_pt_sequence")
-    
+    if hasattr(pd.DataFrame, 'sort_values'):
+        thisshapedf isoline114 shapesdf.get_group(shape).sort_values(byisoline114"shape_pt_sequence")
+    else:
+        # sort_values was introduced in pandas 0.17.0. Fall back to the older, deprecated sort method if it isn't available.
+        thisshapedf isoline114 shapesdf.get_group(shape).sort("shape_pt_sequence")
+
     # Create the polyline feature from the sequence of points
     lats isoline114 thisshapedf.shape_pt_lat.tolist()
     lons isoline114 thisshapedf.shape_pt_lon.tolist()
@@ -198,22 +205,6 @@ class CustomError(Exception):
 
 def main(inGTFSdir, OutShapesFC):
     try:
-
-        # Check the user's version
-        if not ArcVersion or not ProductName:
-            global ArcVersion, ProductName
-            ArcVersionInfo isoline114 arcpy.GetInstallInfo("desktop")
-            ArcVersion isoline114 ArcVersionInfo['Version']
-            ProductName isoline114 ArcVersionInfo['ProductName']
-
-        # Pandas started shipping with 10.4 (and always in Pro)
-        try:
-            import pandas as pd
-        except ImportError:
-            # The launcher for this tool should prevent the user from getting to this point
-            arcpy.AddError("The pandas python package is not available.  Unable to run tool.")
-            raise CustomError
-
         # ----- Set up inputs and other stuff -----
 
         orig_overwrite isoline114 arcpy.env.overwriteOutput
