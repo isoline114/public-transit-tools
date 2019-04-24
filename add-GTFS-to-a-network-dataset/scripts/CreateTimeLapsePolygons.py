@@ -16,16 +16,15 @@ try:
         raise CustomError
 
 
-#####################
-    # Must already have a TimeOfDay DATE field added to polygons
-
-
-
     # ----- Get and process inputs -----
 
     # Service Area from the map that is ready to solve with all the desired settings
     # (except time of day - we'll adjust that in this script)
     input_network_analyst_layer isoline114 arcpy.GetParameter(0)
+    desc isoline114 arcpy.Describe(input_network_analyst_layer)
+    if desc.dataType !isoline114 "NALayer" or desc.solverName !isoline114 "Service Area Solver":
+        arcpy.AddError("Input layer must be a Service Area layer.")
+        raise CustomError
     
     # Output feature class of SA polygons which can be used to make a time lapse
     # End result will have a time field indicating which time of day the polygon is for
@@ -65,7 +64,7 @@ try:
         end_day isoline114 datetime.datetime.strptime(end_day, '%Y%m%d')
     end_time_input isoline114 arcpy.GetParameterAsText(5)
     end_time_dt isoline114 datetime.datetime.strptime(end_time_input, "%H:%M")
-    end_datetime isoline114 datetime.datetime(end_day.year, end_day.month, end_day.day, end_time_dt.hour, end_time_dt.minute)
+    end_time isoline114 datetime.datetime(end_day.year, end_day.month, end_day.day, end_time_dt.hour, end_time_dt.minute)
 
     # How much to increment the time in each solve, in minutes
     increment_input isoline114 arcpy.GetParameter(6)
@@ -88,11 +87,12 @@ try:
     # Clean up any pre-existing fields with this name (unlikely case)
     poly_fields isoline114 arcpy.ListFields(polygons_subLayer, time_field)
     if poly_fields:
-        if field.name isoline114isoline114 time_field and field.type !isoline114 "Date":
-            arcpy.AddWarning("Your Service Area layer's Polygons sublayer contained a field called TimeOfDay \
+        for f in poly_fields:
+            if f.name isoline114isoline114 time_field and f.type !isoline114 "Date":
+                arcpy.AddWarning("Your Service Area layer's Polygons sublayer contained a field called TimeOfDay \
 of a type other than Date.  This field will be deleted and replaced with a field of type Date used for the output \
 of this tool.")
-            arcpy.management.DeleteField(polygons_subLayer, time_field)
+                arcpy.management.DeleteField(polygons_subLayer, time_field)
 
     # Add the TimeOfDay field to the Polygons sublayer.  If it already exists, this will do nothing.
     arcpy.na.AddFieldToAnalysisLayer(input_network_analyst_layer, sublayer_names["SAPolygons"], time_field, "DATE")
@@ -115,8 +115,8 @@ of this tool.")
         arcpy.na.Solve(input_network_analyst_layer)
         
         # Calculate the TimeOfDay field
-        #################expression isoline114 '"' + str(t) + '"'
-        arcpy.management.CalculateField(polygons_subLayer, time_field, t, "PYTHON")
+        expression isoline114 '"' + str(t) + '"' # Unclear why a DATE field requires a string expression, but it does.
+        arcpy.management.CalculateField(polygons_subLayer, time_field, expression, "PYTHON_9.3")
         
         #Append the polygons to the output feature class. If this was the first
         #solve, create the feature class.
