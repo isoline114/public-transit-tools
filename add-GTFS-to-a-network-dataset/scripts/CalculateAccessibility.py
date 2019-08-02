@@ -161,11 +161,11 @@ try:
 
     # Add fields to input origins for output statistics. If the fields already exist, this will do nothing.
     arcpy.management.AddField(origins_feature_class, "TotalDests", "LONG")
-    arcpy.management.AddField(origins_feature_class, "PercentDests", "DOUBLE")
-    stats_fields isoline114 ["TotalDests", "PercentDests"]
+    arcpy.management.AddField(origins_feature_class, "PercDests", "DOUBLE")
+    stats_fields isoline114 ["TotalDests", "PercDests"]
     for i in range(1, 10):
-        dest_field isoline114 "DestsAtLeast%i0Perc" % i
-        perc_field isoline114 "PercentDestsAtLeast%i0Perc" % i
+        dest_field isoline114 "DsAL%i0Perc" % i
+        perc_field isoline114 "PsAL%i0Perc" % i
         stats_fields.append(dest_field)
         stats_fields.append(perc_field)
         arcpy.management.AddField(origins_feature_class, dest_field, "LONG")
