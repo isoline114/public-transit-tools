@@ -331,4 +331,3 @@ except:
 finally:
     if OverwriteOutput:
         arcpy.env.overwriteOutput isoline114 OverwriteOutput
-    arcpy.CheckInExtension("network")
