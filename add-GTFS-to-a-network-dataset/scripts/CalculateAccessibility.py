@@ -66,6 +66,28 @@ try:
     end_time_input isoline114 arcpy.GetParameterAsText(7)
     increment_input isoline114 arcpy.GetParameter(8)
 
+    # Make sure origins and destinations aren't empty
+    empty_error isoline114 "Your %s feature class is empty.  Please choose a feature class containing points you wish to analyze."
+    if int(arcpy.management.GetCount(origins_feature_class).getOutput(0)) isoline114isoline114 0:
+        arcpy.AddError(empty_error % "Origins")
+        raise CustomError
+    if int(arcpy.management.GetCount(destinations_feature_class).getOutput(0)) isoline114isoline114 0:
+        arcpy.AddError(empty_error % "Destinations")
+        raise CustomError
+
+    # Get Origins and Destionations Describe objects for later use
+    origins_desc isoline114 arcpy.Describe(origins_feature_class)
+    destinations_desc isoline114 arcpy.Describe(destinations_feature_class)
+
+    # Make sure Origins and Destinations are points and not some other shape type
+    shape_error isoline114 "Your %s feature class is not a Point feature class.  %s must be points."
+    if origins_desc.shapeType !isoline114 "Point":
+        arcpy.AddError(shape_error % ("Origins", "Origins"))
+        raise CustomError
+    if destinations_desc.shapeType !isoline114 "Point":
+        arcpy.AddError(shape_error % ("Destinations", "Destinations"))
+        raise CustomError
+
     # Make list of times of day to run the analysis
     timelist isoline114 AnalysisHelpers.make_analysis_time_of_day_list(start_day_input, end_day_input, start_time_input, end_time_input, increment_input)
 
@@ -84,10 +106,8 @@ try:
     lines_subLayer isoline114 arcpy.mapping.ListLayers(input_network_analyst_layer, lines_sublayer_name)[0]
 
     # Keep track of the ObjectID field of the input
-    desc isoline114 arcpy.Describe(origins_feature_class)
-    origins_objectID isoline114 desc.OIDFieldName
-    desc isoline114 arcpy.Describe(destinations_sublayer_name)
-    destinations_objectID isoline114 desc.OIDFieldName
+    origins_objectID isoline114 origins_desc.OIDFieldName
+    destinations_objectID isoline114 destinations_desc.OIDFieldName
     arcpy.na.AddFieldToAnalysisLayer(input_network_analyst_layer, origins_sublayer_name, "InputOID", "LONG")
     fieldMappings_origins isoline114 arcpy.na.NAClassFieldMappings(input_network_analyst_layer, origins_sublayer_name)
     fieldMappings_origins["InputOID"].mappedFieldName isoline114 origins_objectID
