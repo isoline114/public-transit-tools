@@ -2,7 +2,7 @@
 ## Toolbox: Add GTFS to a Network Dataset / Transit Analysis Tools
 ## Tool name: Calculate Accessibility Matrix
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 10 August 2017
+## Last updated: 13 September 2017
 ################################################################################
 '''Count the number of destinations reachable from each origin by transit and 
 walking. The tool calculates an Origin-Destination Cost Matrix for each start 
@@ -210,23 +210,24 @@ try:
             # Keys are percentage of times reachable, 10% of times, 20% of times, etc.
             reachable_dests_perc isoline114 {i:0 for i in range(10, 100, 10)}
             # Loop through all destinations
-            for dest in OD_count_dict[origin_OID]:
-                if OD_count_dict[origin_OID][dest] > 0: # If this destination was ever reachable by this origin
-                    # Calculate the percentage of start times when this destination was reachable
-                    percent_of_times_reachable isoline114 (float(OD_count_dict[origin_OID][dest]) / float(len(timelist))) * 100
-                    if destination_weight_dict:
-                        # If using a weight field, determine how much weight reaching this destination contributes to the total
-                        dests_to_add isoline114 destination_weight_dict[destinations_oid_dict[dest]]
-                    else:
-                        # Otherwise, just count it as 1
-                        dests_to_add isoline114 1
-                    # Increment the total number of destinations that were ever reached by this origin
-                    reachable_dests +isoline114 dests_to_add
-                    # Also increment the percentage counters
-                    for perc in reachable_dests_perc:
-                        # If the actual percent of times reached is greater than the counter threshold, increment the counter
-                        if percent_of_times_reachable >isoline114 perc:
-                            reachable_dests_perc[perc] +isoline114 dests_to_add
+            if origin_OID in OD_count_dict: # If it's not present, that means no destinations were ever found for this origin
+                for dest in OD_count_dict[origin_OID]:
+                    if OD_count_dict[origin_OID][dest] > 0: # If this destination was ever reachable by this origin
+                        # Calculate the percentage of start times when this destination was reachable
+                        percent_of_times_reachable isoline114 (float(OD_count_dict[origin_OID][dest]) / float(len(timelist))) * 100
+                        if destination_weight_dict:
+                            # If using a weight field, determine how much weight reaching this destination contributes to the total
+                            dests_to_add isoline114 destination_weight_dict[destinations_oid_dict[dest]]
+                        else:
+                            # Otherwise, just count it as 1
+                            dests_to_add isoline114 1
+                        # Increment the total number of destinations that were ever reached by this origin
+                        reachable_dests +isoline114 dests_to_add
+                        # Also increment the percentage counters
+                        for perc in reachable_dests_perc:
+                            # If the actual percent of times reached is greater than the counter threshold, increment the counter
+                            if percent_of_times_reachable >isoline114 perc:
+                                reachable_dests_perc[perc] +isoline114 dests_to_add
             # Calculate the percentage of all destinations that were ever reached
             percent_dests isoline114 (float(reachable_dests) / float(num_dests)) * 100
             row[1] isoline114 reachable_dests
