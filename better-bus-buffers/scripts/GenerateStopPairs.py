@@ -208,7 +208,7 @@ This is invalid, so trips with this id will not be included in your network." % 
 
     # Create a line-based schedule table 
     c.execute("DROP TABLE IF EXISTS schedules;")
-    c.execute("CREATE TABLE schedules (key TEXT, arrival_time REAL, departure_time REAL, trip_id TEXT);")
+    c.execute("CREATE TABLE schedules (key TEXT, start_time REAL, end_time REAL, trip_id TEXT);")
 
     # Find pairs of directly-connected stops
     linefeature_dict isoline114 {}
@@ -221,25 +221,35 @@ This is invalid, so trips with this id will not be included in your network." % 
     stoptimes isoline114 c.fetchall()
     current_trip isoline114 None
     previous_stop isoline114 None
+    start_time isoline114 None
+    end_time isoline114 None
     for st in stoptimes:
         trip_id isoline114 st[0]
         stop_id isoline114 st[1]
+        arrival_time isoline114 st[2]
+        departure_time isoline114 st[3]
         if trip_id !isoline114 current_trip:
             current_trip isoline114 trip_id
             previous_stop isoline114 stop_id
+            start_time isoline114 departure_time # Start time of segment is the departure time from the stop
             continue
         start_stop isoline114 previous_stop
         end_stop isoline114 stop_id
+        end_time isoline114 arrival_time
         ###########
         #arcpy.AddMessage(trip_id)
         SourceOIDkey isoline114 "%s , %s , %s" % (start_stop, end_stop, trip_routeid_dict[trip_id])
         # This stop pair needs a line feature
         linefeature_dict[SourceOIDkey] isoline114 True
         ##############
-        stmt isoline114 """INSERT INTO schedules (key, arrival_time, departure_time, trip_id) VALUES ('%s', %s, %s, '%s');""" % (SourceOIDkey, st[2], st[3], trip_id)
+        stmt isoline114 """INSERT INTO schedules (key, start_time, end_time, trip_id) VALUES ('%s', %s, %s, '%s');""" % (SourceOIDkey, start_time, end_time, trip_id)
         #arcpy.AddMessage(stmt)
         c.execute(stmt)
         previous_stop isoline114 stop_id
+        start_time isoline114 departure_time
+    conn.commit()
+    c.execute("CREATE INDEX schedules_index_tripsst ON schedules (trip_id, start_time);")
+    c.execute("CREATE INDEX schedules_index_tripsend ON schedules (trip_id, end_time);")
     conn.commit()
 
     ######################
