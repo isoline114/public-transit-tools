@@ -410,7 +410,7 @@ def GetLineTimesInTimeWindow(start, end, DepOrArr, triplist, day):
             AND start_time BETWEEN ? AND ?
             AND end_time BETWEEN ? AND ?
             ;'''
-        c.execute(linesfetch, (trip, start, end,))
+        c.execute(linesfetch, (trip, start, end, start, end,))
         LineTimes isoline114 c.fetchall()
 
         for linetime in LineTimes:
