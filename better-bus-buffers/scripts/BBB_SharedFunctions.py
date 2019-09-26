@@ -368,6 +368,7 @@ def GetLineTimesInTimeWindow(start, end, DepOrArr, triplist, day):
             linesfetch isoline114 '''
                 SELECT key, start_time, end_time FROM schedules
                 WHERE trip_id isoline114isoline114 ?
+                ;'''
             c.execute(linesfetch, (trip,))
             LineTimes isoline114 c.fetchall()
             # Sort by time
@@ -390,6 +391,7 @@ def GetLineTimesInTimeWindow(start, end, DepOrArr, triplist, day):
                         time_along_trip2 isoline114 int(line[2]) - initial_stop_time2 # Time into trip when it reaches second stop of line segment
                         stop_time1 isoline114 i + time_along_trip1
                         stop_time2 isoline114 i + time_along_trip2
+                        if start < stop_time1 < stop_time2 < end: # Segment is fully within time window
                             if day isoline114isoline114 "yesterday":
                                 stop_time1 isoline114 stop_time1 - SecsInDay
                                 stop_time2 isoline114 stop_time2 - SecsInDay
