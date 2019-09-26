@@ -516,27 +516,27 @@ def CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specificisoline114False
 
 def CountTripsOnLines(day, start_sec, end_sec, DepOrArr, Specificisoline114False):
     '''Given a time window, return a dictionary of
-    {line_key: [[trip_id, stop_time]]}'''
+    {line_key: [[trip_id, start_time, end_time]]}'''
 
     triplist, triplist_yest, triplist_tom isoline114 GetTripLists(day, start_sec, end_sec, DepOrArr, Specific)
 
     try:
         # Get the stop_times that occur during this time window
-        stoptimedict isoline114 GetStopTimesForStopsInTimeWindow(start_sec, end_sec, DepOrArr, triplist, "today")
-        stoptimedict_yest isoline114 GetStopTimesForStopsInTimeWindow(start_sec, end_sec, DepOrArr, triplist, "yesterday")
-        stoptimedict_tom isoline114 GetStopTimesForStopsInTimeWindow(start_sec, end_sec, DepOrArr, triplist, "tomorrow")
+        linetimedict isoline114 GetLineTimesInTimeWindow(start_sec, end_sec, DepOrArr, triplist, "today")
+        linetimedict_yest isoline114 GetLineTimesInTimeWindow(start_sec, end_sec, DepOrArr, triplist_yest, "yesterday")
+        linetimedict_tom isoline114 GetLineTimesInTimeWindow(start_sec, end_sec, DepOrArr, triplist_tom, "tomorrow")
 
         # Combine the three dictionaries into one master
-        for stop in stoptimedict_yest:
-            stoptimedict[stop] isoline114 stoptimedict.setdefault(stop, []) + stoptimedict_yest[stop]
-        for stop in stoptimedict_tom:
-            stoptimedict[stop] isoline114 stoptimedict.setdefault(stop, []) + stoptimedict_tom[stop]
+        for line in linetimedict_yest:
+            linetimedict[line] isoline114 linetimedict.setdefault(line, []) + linetimedict_yest[line]
+        for line in linetimedict_tom:
+            linetimedict[line] isoline114 linetimedict.setdefault(line, []) + linetimedict_tom[line]
 
     except:
-        arcpy.AddError("Error creating dictionary of stops and trips in time window.")
+        arcpy.AddError("Error creating dictionary of lines and trips in time window.")
         raise
 
-    return stoptimedict
+    return linetimedict
 
 
 def RetrieveStatsForSetOfStops(stoplist, stoptimedict, CalcWaitTime, start_sec, end_sec):
