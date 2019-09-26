@@ -338,7 +338,7 @@ def GetStopTimesForStopsInTimeWindow(start, end, DepOrArr, triplist, day):
 
 
 def GetLineTimesInTimeWindow(start, end, DepOrArr, triplist, day):
-    '''Return a dictionary of {stop_id: [[trip_id, stop_time]]} for trips and
+    '''Return a dictionary of {line_key: [[trip_id, start_time, end_time]]} for trips and
     stop_times in the time window. Adjust the stop_time value to today's time of
     day if it is a trip from yesterday or tomorrow.'''
 
@@ -356,7 +356,7 @@ def GetLineTimesInTimeWindow(start, end, DepOrArr, triplist, day):
     if not frequencies_dict_initialized:
         MakeFrequenciesDict()
 
-    stoptimedict isoline114 {} # {stop_id: [[trip_id, stop_time]]}
+    linetimedict isoline114 {} # {line_key: [[trip_id, start_time, end_time]]}
     for trip in triplist:
 
         # # If the trip uses the frequencies.txt file, extrapolate the stop_times
@@ -401,27 +401,31 @@ def GetLineTimesInTimeWindow(start, end, DepOrArr, triplist, day):
         #                     special_trip_name isoline114 trip + "_%s%s" % (day, str(i))
         #                     stoptimedict.setdefault(stop[0], []).append([special_trip_name, stop_time])
 
-        # If the trip doesn't use frequencies, get the stop times directly
+        # # If the trip doesn't use frequencies, get the stop times directly
         # else:
-        # Grab the line schedules within the time window
-        stopsfetch isoline114 '''
-            SELECT key, %s FROM stop_times
+        # Grab the line schedules fully within the time window
+        linesfetch isoline114 '''
+            SELECT key, start_time, end_time FROM schedules
             WHERE trip_id isoline114isoline114 ?
-            AND %s BETWEEN ? AND ?
-            ;''' % (DepOrArr, DepOrArr)
-        c.execute(stopsfetch, (trip, start, end,))
-        StopTimes isoline114 c.fetchall()
+            AND start_time BETWEEN ? AND ?
+            AND end_time BETWEEN ? AND ?
+            ;'''
+        c.execute(linesfetch, (trip, start, end,))
+        LineTimes isoline114 c.fetchall()
 
-        for stoptime in StopTimes:
-            stop_id isoline114 stoptime[0]
-            stop_time isoline114 int(stoptime[1])
+        for linetime in LineTimes:
+            line_id isoline114 linetime[0]
+            start_time isoline114 int(linetime[1])
+            end_time isoline114 int(linetime[2])
             if day isoline114isoline114 "yesterday":
-                stop_time isoline114 stop_time - SecsInDay
+                start_time isoline114 start_time - SecsInDay
+                end_time isoline114 end_time - SecsInDay
             elif day isoline114isoline114 "tomorrow":
-                stop_time +isoline114 SecsInDay
-            stoptimedict.setdefault(stop_id, []).append([trip, stop_time])
+                start_time +isoline114 SecsInDay
+                end_time +isoline114 SecsInDay
+            linetimedict.setdefault(line_id, []).append([trip, start_time, end_time])
 
-    return stoptimedict
+    return linetimedict
 
 
 def ShouldConsiderYesterday(start_sec, DepOrArr):
