@@ -35,8 +35,10 @@ class CustomError(Exception):
 
 # ----- Collect user inputs -----
 
-SQLDbase isoline114 r'E:\TransitToolTests\LineFrequency\TANK.sql'
-outGDB isoline114 r'E:\TransitToolTests\LineFrequency\LineFrequency.gdb'
+# SQLDbase isoline114 r'E:\TransitToolTests\LineFrequency\TANK.sql'
+# outGDB isoline114 r'E:\TransitToolTests\LineFrequency\LineFrequency.gdb'
+SQLDbase isoline114 r'E:\TransitToolTests\LineFrequency\Montreal.sql'
+outGDB isoline114 r'E:\TransitToolTests\LineFrequency\LineFrequency2.gdb'
 
 # Derived inputs
 outStopPairsFCName isoline114 "StopPairs"
@@ -130,22 +132,22 @@ This trip can still be used for analysis, but it might be an indication of a pro
 
 # ----- Make dictionary of frequency information (if there is any) -----
 
-    frequencies_dict isoline114 {}
-    freqfetch isoline114 '''
-        SELECT trip_id, start_time, end_time, headway_secs
-        FROM frequencies
-        ;'''
-    c.execute(freqfetch)
-    freqlist isoline114 c.fetchall()
-    for freq in freqlist:
-        trip_id isoline114 freq[0]
-        if freq[3] isoline114isoline114 0:
-            arcpy.AddWarning("Trip_id %s in your frequencies.txt file has a headway of 0 seconds. \
-This is invalid, so trips with this id will not be included in your network." % trip_id)
-            continue
-        trip_data isoline114 [freq[1], freq[2], freq[3]]
-        # {trip_id: [start_time, end_time, headway_secs]}
-        frequencies_dict.setdefault(trip_id, []).append(trip_data)
+#     frequencies_dict isoline114 {}
+#     freqfetch isoline114 '''
+#         SELECT trip_id, start_time, end_time, headway_secs
+#         FROM frequencies
+#         ;'''
+#     c.execute(freqfetch)
+#     freqlist isoline114 c.fetchall()
+#     for freq in freqlist:
+#         trip_id isoline114 freq[0]
+#         if freq[3] isoline114isoline114 0:
+#             arcpy.AddWarning("Trip_id %s in your frequencies.txt file has a headway of 0 seconds. \
+# This is invalid, so trips with this id will not be included in your network." % trip_id)
+#             continue
+#         trip_data isoline114 [freq[1], freq[2], freq[3]]
+#         # {trip_id: [start_time, end_time, headway_secs]}
+#         frequencies_dict.setdefault(trip_id, []).append(trip_data)
 
 
 # ----- Generate transit stops feature class (for the final ND) -----
@@ -206,9 +208,10 @@ This is invalid, so trips with this id will not be included in your network." % 
     arcpy.AddMessage("Obtaining and processing transit schedule and line information...")
     arcpy.AddMessage("(This will take a few minutes for large datasets.)")
 
-    # Create a line-based schedule table 
-    c.execute("DROP TABLE IF EXISTS schedules;")
-    c.execute("CREATE TABLE schedules (key TEXT, start_time REAL, end_time REAL, trip_id TEXT);")
+    # Create a line-based schedule table
+    c2 isoline114 conn.cursor()
+    c2.execute("DROP TABLE IF EXISTS schedules;")
+    c2.execute("CREATE TABLE schedules (key TEXT, start_time REAL, end_time REAL, trip_id TEXT);")
 
     # Find pairs of directly-connected stops
     linefeature_dict isoline114 {}
@@ -218,12 +221,11 @@ This is invalid, so trips with this id will not be included in your network." % 
     ORDER BY trip_id, stop_sequence
     ;'''
     c.execute(stoptimefetch)
-    stoptimes isoline114 c.fetchall()
     current_trip isoline114 None
     previous_stop isoline114 None
     start_time isoline114 None
     end_time isoline114 None
-    for st in stoptimes:
+    for st in c:
         trip_id isoline114 st[0]
         stop_id isoline114 st[1]
         arrival_time isoline114 st[2]
@@ -236,19 +238,15 @@ This is invalid, so trips with this id will not be included in your network." % 
         start_stop isoline114 previous_stop
         end_stop isoline114 stop_id
         end_time isoline114 arrival_time
-        ###########
-        #arcpy.AddMessage(trip_id)
         SourceOIDkey isoline114 "%s , %s , %s" % (start_stop, end_stop, trip_routeid_dict[trip_id])
         # This stop pair needs a line feature
         linefeature_dict[SourceOIDkey] isoline114 True
-        ##############
         stmt isoline114 """INSERT INTO schedules (key, start_time, end_time, trip_id) VALUES ('%s', %s, %s, '%s');""" % (SourceOIDkey, start_time, end_time, trip_id)
-        #arcpy.AddMessage(stmt)
-        c.execute(stmt)
+        c2.execute(stmt)
         previous_stop isoline114 stop_id
         start_time isoline114 departure_time
     conn.commit()
-    c.execute("CREATE INDEX schedules_index_tripsstend ON schedules (trip_id, start_time, end_time);")
+    c2.execute("CREATE INDEX schedules_index_tripsstend ON schedules (trip_id, start_time, end_time);")
     conn.commit()
 
     ######################
