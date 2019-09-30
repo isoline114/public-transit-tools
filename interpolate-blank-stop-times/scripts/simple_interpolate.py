@@ -207,8 +207,7 @@ in your dataset. %s trips with blank stop time values were missing times for the
         columnquery isoline114 ", ".join(columns)
         selectstoptimesstmt isoline114 "SELECT %s FROM stop_times;" % columnquery
         c.execute(selectstoptimesstmt)
-        allstoptimes isoline114 c.fetchall()
-        for stoptime in allstoptimes:
+        for stoptime in c:
             # Encode in utf-8.
             if ProductName isoline114isoline114 "ArcGISPro":
                 stoptimelist isoline114 [t for t in stoptime]
