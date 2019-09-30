@@ -117,19 +117,20 @@ def make_GTFS_lines_from_Shapes(shape, routeisoline114None):
         route_text_color_formatted isoline114 ""
 
     # Fetch the shape info to create the polyline feature.
+    c3 isoline114 conn.cursor()
     pointsinshapefetch isoline114 '''
         SELECT shape_pt_lat, shape_pt_lon, shape_pt_sequence,
         shape_dist_traveled FROM shapes WHERE shape_idisoline114'%s'
-        ;''' % shape
-    c.execute(pointsinshapefetch)
-    points isoline114 c.fetchall()
+        ORDER BY shape_pt_sequence;''' % shape
+    c3.execute(pointsinshapefetch)
+    ##points isoline114 c.fetchall()
     # Sort by sequence
-    points.sort(keyisoline114operator.itemgetter(2))
+    ##points.sort(keyisoline114operator.itemgetter(2))
 
     # Create the polyline feature from the sequence of points
     array isoline114 arcpy.Array()
     pt isoline114 arcpy.Point()
-    for point in points:
+    for point in c3:
         pt.X isoline114 float(point[1])
         pt.Y isoline114 float(point[0])
         array.add(pt)
@@ -246,7 +247,7 @@ def main(inGTFSdir, OutShapesFC):
         sqlize_csv.db.close()
         
         # Connect to the SQL database
-        global c
+        global c, conn
         conn isoline114 sqlite3.connect(SQLDbase)
         c isoline114 conn.cursor()
 
@@ -271,8 +272,9 @@ the output feature class's attribute table with route information.")
                 FROM routes
                 ;'''
             c.execute(routesfetch)
-            routelist isoline114 c.fetchall()
-            for routeitem in routelist:
+            ###############
+            #routelist isoline114 c.fetchall()
+            for routeitem in c:
                 # Convert from a tuple to a list so the .shp logic below doesn't mess up
                 route isoline114 list(routeitem)
                 # {route_id: [all route.txt fields + route_type_text]}
@@ -360,11 +362,15 @@ the output feature class's attribute table with route information.")
             SELECT DISTINCT shape_id FROM shapes
             ;'''
         c.execute(shapesfetch)
-        shapeslist isoline114 c.fetchall()
+        #################
+        #shapeslist isoline114 c.fetchall()
+        
+        
+        c2 isoline114 conn.cursor()
 
         # Actually add the shapes to the feature class
         unused_shapes isoline114 False
-        for shape in shapeslist:
+        for shape in c:
             if not sqlize_csv.populate_route_info:
                 # Don't worry about populating route info
                 make_GTFS_lines_from_Shapes(shape[0])
@@ -374,15 +380,17 @@ the output feature class's attribute table with route information.")
                 shapesroutesfetch isoline114 '''
                     SELECT DISTINCT route_id FROM trips WHERE shape_idisoline114'%s'
                     ;''' % shape[0]
-                c.execute(shapesroutesfetch)
-                shapesroutes isoline114 c.fetchall()
-                if len(shapesroutes) isoline114isoline114 0:
+                c2.execute(shapesroutesfetch)
+                ###########
+                #shapesroutes isoline114 c.fetchall()
+                weresome isoline114 False
+                for route in c2:
+                    weresome isoline114 True
+                    make_GTFS_lines_from_Shapes(shape[0], route[0])
+                if not weresome:
                     # No trips actually use this shape, so skip adding route info
                     make_GTFS_lines_from_Shapes(shape[0])
                     unused_shapes isoline114 True
-                else:
-                    for route in shapesroutes:
-                        make_GTFS_lines_from_Shapes(shape[0], route[0])
 
         if unused_shapes:
             arcpy.AddWarning("One or more of the shapes in your GTFS shapes.txt file are not used by any \
