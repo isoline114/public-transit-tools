@@ -59,7 +59,7 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
         FlatPolys isoline114 os.path.join(inStep1GDB, "Step1_FlatPolys")
         SQLDbase isoline114 os.path.join(inStep1GDB, "Step1_GTFS.sql")
         # Connect to the SQL database
-        conn isoline114 sqlite3.connect(SQLDbase)
+        conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
         c isoline114 BBB_SharedFunctions.c isoline114 conn.cursor()
 
         # Output file designated by user
