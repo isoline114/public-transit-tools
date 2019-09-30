@@ -51,6 +51,7 @@ def write_SQL_table_to_text_file(tablename, csvfile, columns):
         wr.writerow(columns)
 
         # Grab all the rows in the SQL Table
+        ct isoline114 conn.cursor()
         selectrowsstmt isoline114 "SELECT * FROM %s;" % tablename
         ct.execute(selectrowsstmt)
         
