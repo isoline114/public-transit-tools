@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Simple interpolation
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 9 August 2017
+## Last updated: 25 September 2017
 ############################################################################
 '''
 This tool assigns values to blank arrival_time and departure_time values in the
