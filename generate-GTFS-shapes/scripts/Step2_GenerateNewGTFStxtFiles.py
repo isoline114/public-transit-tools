@@ -52,11 +52,10 @@ def write_SQL_table_to_text_file(tablename, csvfile, columns):
 
         # Grab all the rows in the SQL Table
         selectrowsstmt isoline114 "SELECT * FROM %s;" % tablename
-        c.execute(selectrowsstmt)
-        allrows isoline114 c.fetchall()
+        ct.execute(selectrowsstmt)
         
         # Write each row to the csv file
-        for row in allrows:
+        for row in ct:
             # Encode row in utf-8.
             if ProductName isoline114isoline114 "ArcGISPro":
                 rowToWrite isoline114 tuple([t for t in row])
@@ -218,10 +217,10 @@ tool. You have ArcGIS Pro version %s." % ArcVersion)
                 for trip in get_trips_with_shape_id(line[1]):
                     trip_shape_dict[trip] isoline114 line[1]
         else:
+            cts isoline114 conn.cursor()
             tripsfetch isoline114 '''SELECT trip_id, shape_id FROM trips;'''
-            c.execute(tripsfetch)
-            trips isoline114 c.fetchall()
-            for trip in trips:
+            cts.execute(tripsfetch)
+            for trip in cts:
                 trip_shape_dict[trip[0]] isoline114 trip[1]
             
     except:
@@ -492,10 +491,10 @@ str(shapes_with_warnings))
 
             # Read in the rows from the stop_times SQL table, look up the \
             # shape_dist_traveled, and write to CSV
+            cst isoline114 conn.cursor()
             selectstoptimesstmt isoline114 "SELECT * FROM stop_times;"
-            c.execute(selectstoptimesstmt)
-            allstoptimes isoline114 c.fetchall()
-            for stoptime in allstoptimes:
+            cst.execute(selectstoptimesstmt)
+            for stoptime in cst:
                 # Encode in utf-8.
                 if ProductName isoline114isoline114 "ArcGISPro":
                     stoptimelist isoline114 [t for t in stoptime]
