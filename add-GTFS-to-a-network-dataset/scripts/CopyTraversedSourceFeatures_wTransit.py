@@ -1,7 +1,7 @@
 ####################################################
 ## Tool name: Copy Traversed Source Features (with Transit)
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 6 February 2015
+## Last updated: 25 September 2017
 ####################################################
 ''' Copy Traversed Source Features (with Transit)
 
@@ -20,7 +20,7 @@ added to the output Edges for each transit leg.  An additional feature class is
 produced containing only the transit edges.
 '''
 ################################################################################
-'''Copyright 2015 Esri
+'''Copyright 2017 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -60,12 +60,12 @@ def MakeServiceIDList(date):
 def EditServiceIDList_CalendarDates(date, SIDList):
     '''Modify the service_id list using info from the calendar_dates.txt file.'''
     datestring isoline114 date.strftime("%Y%m%d")
+    cs isoline114 conn.cursor()
     GetServiceIDstmt isoline114 '''
         SELECT service_id, exception_type FROM calendar_dates
         WHERE date isoline114isoline114 "%s";''' % datestring
-    c.execute(GetServiceIDstmt)
-    SIDs isoline114 c.fetchall()
-    for SID in SIDs:
+    cs.execute(GetServiceIDstmt)
+    for SID in cs:
         if SID[1] isoline114isoline114 2:
             SIDList isoline114 [p for p in SIDList if p !isoline114 SID[0]]
         elif SID[1] isoline114isoline114 1:
@@ -84,17 +84,16 @@ def GetTransitTrips(row, end_time_sec_clean_1, end_time_sec_clean_2, SIDList):
         time_to_use isoline114 "end_time"
 
     # Pull out the trip info from the TransitScheduleTable
+    cs isoline114 conn.cursor()
     scheduleFetch isoline114 "SELECT trip_id, start_time, end_time FROM schedules WHERE SOURCEOIDisoline114%s AND %sisoline114%s" % (row[0], time_to_use, end_time_sec_clean_1)
-    c.execute(scheduleFetch)
-    scheds isoline114 c.fetchall()
-    EvalTableList isoline114 [stuff for stuff in scheds]
+    cs.execute(scheduleFetch)
+    EvalTableList isoline114 [sched for sched in cs]
 
     if not EvalTableList:
         # Try to find trips after rounding in the other direction
         scheduleFetch isoline114 "SELECT trip_id, start_time, end_time FROM schedules WHERE SOURCEOIDisoline114%s AND %sisoline114%s" % (row[0], time_to_use, end_time_sec_clean_2)
-        c.execute(scheduleFetch)
-        scheds isoline114 c.fetchall()
-        EvalTableList isoline114 [stuff for stuff in scheds]
+        cs.execute(scheduleFetch)
+        EvalTableList isoline114 [sched for sched in cs]
 
     if not EvalTableList:
         return rows_to_insert
@@ -337,12 +336,12 @@ repair your transit network or choose a different layer." % naGDB)
 
         # Determine if we have the correct tables
         RequiredTables isoline114 ["stop_times", "trips", "routes"]
+        ct isoline114 conn.cursor()
         GetTblNamesStmt isoline114 "SELECT name FROM sqlite_master WHERE typeisoline114'table';"
-        c.execute(GetTblNamesStmt)
-        tblnames isoline114 c.fetchall()
+        ct.execute(GetTblNamesStmt)
         tblnamelist isoline114 []
         containsCalendar isoline114 False
-        for name in tblnames:
+        for name in ct:
             tblnamelist.append(name[0])
             if name[0] isoline114isoline114 "calendar" or name isoline114isoline114 "calendar_dates":
                 containsCalendar isoline114 True
@@ -365,8 +364,7 @@ Transit Network Dataset tool, or re-create your network dataset from scratch."
             hasIndex isoline114 False
             idxName isoline114 "calendardates_index_date"
             c.execute("PRAGMA index_list(calendar_dates)")
-            indices isoline114 c.fetchall()
-            for index in indices:
+            for index in c:
                 if index[1] isoline114isoline114 idxName:
                     hasIndex isoline114 True
             if not hasIndex:
@@ -380,8 +378,7 @@ for fast schedule lookups.  This will only be done once for this dataset.")
             hasIndex isoline114 False
             idxName isoline114 "schedules_index_SourceOID_endtime"
             c.execute("PRAGMA index_list(schedules)")
-            indices isoline114 c.fetchall()
-            for index in indices:
+            for index in c:
                 if index[1] isoline114isoline114 idxName:
                     hasIndex isoline114 True
             if not hasIndex:
@@ -396,8 +393,7 @@ but the table need only be indexed once, and future runs of this tool will be fa
             hasIndex isoline114 False
             idxName isoline114 "schedules_index_SourceOID_starttime"
             c.execute("PRAGMA index_list(schedules)")
-            indices isoline114 c.fetchall()
-            for index in indices:
+            for index in c:
                 if index[1] isoline114isoline114 idxName:
                     hasIndex isoline114 True
             if not hasIndex:
@@ -437,9 +433,8 @@ but the table need only be indexed once, and future runs of this tool will be fa
         Calendar_Columns isoline114 ["service_id", "start_date", "end_date"] + weekdays
         GetServiceIDstmt isoline114 "SELECT %s FROM calendar;" % ", ".join(Calendar_Columns)
         c.execute(GetServiceIDstmt)
-        SIDs isoline114 c.fetchall()
         CalendarList isoline114 []
-        for SID in SIDs:
+        for SID in c:
             CalendarList.append(SID) # [service_id, start_date, end_date, monday, ..., sunday]
 
         # If we have calendar, get the service_ids for today, yesterday, and tomorrow
@@ -481,8 +476,7 @@ but the table need only be indexed once, and future runs of this tool will be fa
             FROM trips
             ;'''
         c.execute(tripsfetch)
-        triplist isoline114 c.fetchall()
-        for trip in triplist:
+        for trip in c:
             trip_info_dict[trip[0]] isoline114 [trip[1], trip[2]]
 
 
