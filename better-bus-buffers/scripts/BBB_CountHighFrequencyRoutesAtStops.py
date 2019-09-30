@@ -178,23 +178,26 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
     # ----- Query the GTFS data to count the trips at each stop -----
     try:
         arcpy.AddMessage("Calculating the determining trips for route-direction pairs...")
-        # Assemble Route and Direction IDS
-        triproutefetch isoline114 '''SELECT DISTINCT route_id,direction_id FROM trips;'''
-        c.execute(triproutefetch)
-        route_dir_list isoline114 c.fetchall()
+        
         # Get the service_ids serving the correct days
         serviceidlist, serviceidlist_yest, serviceidlist_tom isoline114 \
             BBB_SharedFunctions.GetServiceIDListsAndNonOverlaps(day, start_sec, end_sec, DepOrArr, Specific)
+
+        # Assemble Route and Direction IDS
+        triproutefetch isoline114 '''SELECT DISTINCT route_id,direction_id FROM trips;'''
+        c.execute(triproutefetch)
+        #route_dir_list isoline114 c.fetchall()
+        
         # Some GTFS datasets use the same route_id to identify trips traveling in
         # either direction along a route. Others identify it as a different route.
         # We will consider each direction separately if there is more than one.
-
         trip_route_warning_counter isoline114 0
         trip_route_dict isoline114 {}  # {(route_id, direction_id): [trip_id, trip_id,..]}
         trip_route_dict_yest isoline114 {}
         trip_route_dict_tom isoline114 {}
         triproutelist isoline114 []
-        for rtpair in route_dir_list:
+        c2 isoline114 conn.cursor()
+        for rtpair in c:
             key isoline114 tuple(rtpair)
             route_id isoline114 rtpair[0]
             direction_id isoline114 rtpair[1]
@@ -211,8 +214,8 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
                         SELECT trip_id, service_id FROM trips
                         WHERE route_idisoline114'%s'
                         ;''' % route_id
-            c.execute(triproutefetch)
-            triproutelist isoline114 c.fetchall()
+            c2.execute(triproutefetch)
+            triproutelist isoline114 c2.fetchall()
             if not triproutelist:
                 arcpy.AddWarning("Your GTFS dataset does not contain any trips \
 corresponding to Route %s and Direction %s. Please ensure that \
