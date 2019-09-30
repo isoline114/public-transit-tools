@@ -30,7 +30,7 @@ import sqlize_csv
 ArcVersion isoline114 None
 ProductName isoline114 None
 
-c isoline114 None
+conn isoline114 None
 StopsCursor isoline114 None
 
 # Read in as GCS_WGS_1984 because that's what the GTFS spec uses
@@ -123,9 +123,6 @@ def make_GTFS_lines_from_Shapes(shape, routeisoline114None):
         shape_dist_traveled FROM shapes WHERE shape_idisoline114'%s'
         ORDER BY shape_pt_sequence;''' % shape
     c3.execute(pointsinshapefetch)
-    ##points isoline114 c.fetchall()
-    # Sort by sequence
-    ##points.sort(keyisoline114operator.itemgetter(2))
 
     # Create the polyline feature from the sequence of points
     array isoline114 arcpy.Array()
@@ -247,9 +244,8 @@ def main(inGTFSdir, OutShapesFC):
         sqlize_csv.db.close()
         
         # Connect to the SQL database
-        global c, conn
+        global conn
         conn isoline114 sqlite3.connect(SQLDbase)
-        c isoline114 conn.cursor()
 
 
     # ----- Make dictionary of route info -----
@@ -266,14 +262,13 @@ the output feature class's attribute table with route information.")
             arcpy.AddMessage("Collecting Route info...")
         
             # Find all routes and associated info.
+            c isoline114 conn.cursor()
             routesfetch isoline114 '''
                 SELECT route_id, agency_id, route_short_name, route_long_name,
                 route_desc, route_type, route_url, route_color, route_text_color
                 FROM routes
                 ;'''
             c.execute(routesfetch)
-            ###############
-            #routelist isoline114 c.fetchall()
             for routeitem in c:
                 # Convert from a tuple to a list so the .shp logic below doesn't mess up
                 route isoline114 list(routeitem)
@@ -358,18 +353,15 @@ the output feature class's attribute table with route information.")
         arcpy.AddMessage("Adding route shapes to output feature class...")
 
         # Get list of shape_ids
+        c isoline114 conn.cursor()
         shapesfetch isoline114 '''
             SELECT DISTINCT shape_id FROM shapes
             ;'''
         c.execute(shapesfetch)
-        #################
-        #shapeslist isoline114 c.fetchall()
-        
-        
-        c2 isoline114 conn.cursor()
 
         # Actually add the shapes to the feature class
         unused_shapes isoline114 False
+        c2 isoline114 conn.cursor()
         for shape in c:
             if not sqlize_csv.populate_route_info:
                 # Don't worry about populating route info
