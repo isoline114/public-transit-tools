@@ -96,8 +96,7 @@ try:
         FROM routes
         ;'''
     c.execute(routesfetch)
-    routelist isoline114 c.fetchall()
-    for route in routelist:
+    for route in c:
         RouteDict[route[0]] isoline114 route[1]
 
 
@@ -121,8 +120,7 @@ try:
         FROM trips
         ;'''
     c.execute(tripsfetch)
-    triplist isoline114 c.fetchall()
-    for trip in triplist:
+    for trip in c:
         try:
             trip_routeid_dict[trip[0]] isoline114 trip[1]
         except KeyError:
@@ -160,7 +158,6 @@ This trip can still be used for analysis, but it might be an indication of a pro
                         stop_name, stop_desc, zone_id, stop_url, location_type, \
                         parent_station FROM stops"
     c.execute(selectstoptablestmt)
-    StopTable isoline114 c.fetchall()
 
     # Initialize a dictionary of stop lat/lon (filled below)
     # {stop_id: <stop geometry object>} in the output coordinate system
@@ -182,7 +179,7 @@ This trip can still be used for analysis, but it might be an indication of a pro
                                                  "stop_code", "stop_name", "stop_desc",
                                                  "zone_id", "stop_url", "location_type",
                                                  "parent_station"]) as cur3:
-        for stop in StopTable:
+        for stop in c:
             stop_id isoline114 stop[0]
             stop_lat isoline114 stop[1]
             stop_lon isoline114 stop[2]
