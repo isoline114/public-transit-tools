@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Simple interpolation
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 9 August 2017
+## Last updated: 25 September 2017
 ############################################################################
 '''
 This tool assigns values to blank arrival_time and departure_time values in the
@@ -207,8 +207,7 @@ in your dataset. %s trips with blank stop time values were missing times for the
         columnquery isoline114 ", ".join(columns)
         selectstoptimesstmt isoline114 "SELECT %s FROM stop_times;" % columnquery
         c.execute(selectstoptimesstmt)
-        allstoptimes isoline114 c.fetchall()
-        for stoptime in allstoptimes:
+        for stoptime in c:
             # Encode in utf-8.
             if ProductName isoline114isoline114 "ArcGISPro":
                 stoptimelist isoline114 [t for t in stoptime]

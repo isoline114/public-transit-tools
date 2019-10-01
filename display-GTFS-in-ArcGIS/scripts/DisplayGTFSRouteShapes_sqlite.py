@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Display GTFS in ArcGIS
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 1 April 2017
+## Last updated: 25 September 2017
 ############################################################################
 ''' Display GTFS Route Shapes
 Display GTFS Route Shapes converts GTFS route and shape data into an ArcGIS
@@ -30,7 +30,7 @@ import sqlize_csv
 ArcVersion isoline114 None
 ProductName isoline114 None
 
-c isoline114 None
+conn isoline114 None
 StopsCursor isoline114 None
 
 # Read in as GCS_WGS_1984 because that's what the GTFS spec uses
@@ -117,19 +117,17 @@ def make_GTFS_lines_from_Shapes(shape, routeisoline114None):
         route_text_color_formatted isoline114 ""
 
     # Fetch the shape info to create the polyline feature.
+    c3 isoline114 conn.cursor()
     pointsinshapefetch isoline114 '''
         SELECT shape_pt_lat, shape_pt_lon, shape_pt_sequence,
         shape_dist_traveled FROM shapes WHERE shape_idisoline114'%s'
-        ;''' % shape
-    c.execute(pointsinshapefetch)
-    points isoline114 c.fetchall()
-    # Sort by sequence
-    points.sort(keyisoline114operator.itemgetter(2))
+        ORDER BY shape_pt_sequence;''' % shape
+    c3.execute(pointsinshapefetch)
 
     # Create the polyline feature from the sequence of points
     array isoline114 arcpy.Array()
     pt isoline114 arcpy.Point()
-    for point in points:
+    for point in c3:
         pt.X isoline114 float(point[1])
         pt.Y isoline114 float(point[0])
         array.add(pt)
@@ -246,9 +244,8 @@ def main(inGTFSdir, OutShapesFC):
         sqlize_csv.db.close()
         
         # Connect to the SQL database
-        global c
+        global conn
         conn isoline114 sqlite3.connect(SQLDbase)
-        c isoline114 conn.cursor()
 
 
     # ----- Make dictionary of route info -----
@@ -265,14 +262,14 @@ the output feature class's attribute table with route information.")
             arcpy.AddMessage("Collecting Route info...")
         
             # Find all routes and associated info.
+            c isoline114 conn.cursor()
             routesfetch isoline114 '''
                 SELECT route_id, agency_id, route_short_name, route_long_name,
                 route_desc, route_type, route_url, route_color, route_text_color
                 FROM routes
                 ;'''
             c.execute(routesfetch)
-            routelist isoline114 c.fetchall()
-            for routeitem in routelist:
+            for routeitem in c:
                 # Convert from a tuple to a list so the .shp logic below doesn't mess up
                 route isoline114 list(routeitem)
                 # {route_id: [all route.txt fields + route_type_text]}
@@ -356,15 +353,16 @@ the output feature class's attribute table with route information.")
         arcpy.AddMessage("Adding route shapes to output feature class...")
 
         # Get list of shape_ids
+        c isoline114 conn.cursor()
         shapesfetch isoline114 '''
             SELECT DISTINCT shape_id FROM shapes
             ;'''
         c.execute(shapesfetch)
-        shapeslist isoline114 c.fetchall()
 
         # Actually add the shapes to the feature class
         unused_shapes isoline114 False
-        for shape in shapeslist:
+        c2 isoline114 conn.cursor()
+        for shape in c:
             if not sqlize_csv.populate_route_info:
                 # Don't worry about populating route info
                 make_GTFS_lines_from_Shapes(shape[0])
@@ -374,15 +372,15 @@ the output feature class's attribute table with route information.")
                 shapesroutesfetch isoline114 '''
                     SELECT DISTINCT route_id FROM trips WHERE shape_idisoline114'%s'
                     ;''' % shape[0]
-                c.execute(shapesroutesfetch)
-                shapesroutes isoline114 c.fetchall()
-                if len(shapesroutes) isoline114isoline114 0:
+                c2.execute(shapesroutesfetch)
+                weresome isoline114 False
+                for route in c2:
+                    weresome isoline114 True
+                    make_GTFS_lines_from_Shapes(shape[0], route[0])
+                if not weresome:
                     # No trips actually use this shape, so skip adding route info
                     make_GTFS_lines_from_Shapes(shape[0])
                     unused_shapes isoline114 True
-                else:
-                    for route in shapesroutes:
-                        make_GTFS_lines_from_Shapes(shape[0], route[0])
 
         if unused_shapes:
             arcpy.AddWarning("One or more of the shapes in your GTFS shapes.txt file are not used by any \

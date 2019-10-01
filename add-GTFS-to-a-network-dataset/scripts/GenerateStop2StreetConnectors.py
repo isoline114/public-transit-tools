@@ -2,7 +2,7 @@
 ## Toolbox: Add GTFS to a Network Dataset
 ## Tool name: 2) Generate Stop-Street Connectors
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 9 February 2017
+## Last updated: 25 September 2017
 ################################################################################
 ''' This tool snaps the transit stops to the street feature class, generates a
 connector line between the original stop location and the snapped stop location,
@@ -246,10 +246,9 @@ following is true: " + SelectExpression
         # Make a dictionary of stop wheelchair_boarding info
         GetStopInfoStmt isoline114 "SELECT stop_id, wheelchair_boarding, parent_station FROM stops"
         c.execute(GetStopInfoStmt)
-        StopInfo isoline114 c.fetchall()
         WheelchairBoarding_dict isoline114 {} # {stop_id: wheelchair_boarding}
         ParentStation_dict isoline114 {} # {stop_id: parent_station}
-        for stop in StopInfo:
+        for stop in c:
             WheelchairBoarding_dict[stop[0]] isoline114 unicode(stop[1])
             ParentStation_dict[stop[0]] isoline114 stop[2]
 

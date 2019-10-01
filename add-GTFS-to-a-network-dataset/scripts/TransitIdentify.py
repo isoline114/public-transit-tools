@@ -52,8 +52,7 @@ user's guide.")
     hasIndex isoline114 False
     idxName isoline114 "schedules_index_SourceOID_endtime"
     c.execute("PRAGMA index_list(schedules)")
-    indices isoline114 c.fetchall()
-    for index in indices:
+    for index in c:
         if index[1] isoline114isoline114 idxName:
             hasIndex isoline114 True
 
@@ -76,8 +75,7 @@ but the table need only be indexed once, and future runs of this tool will be fa
         FROM trips
         ;'''
     c.execute(tripsfetch)
-    triplist isoline114 c.fetchall()
-    for trip in triplist:
+    for trip in c:
         trip_info_dict[trip[0]] isoline114 [trip[1], trip[2]]
 
     cal_info_dict isoline114 {}
@@ -86,8 +84,7 @@ but the table need only be indexed once, and future runs of this tool will be fa
         FROM calendar
         ;'''
     c.execute(calfetch)
-    callist isoline114 c.fetchall()
-    for cal in callist:
+    for cal in c:
         weekdaystring isoline114 ""
         if bool(cal[1]): weekdaystring +isoline114 "M"
         else: weekdaystring +isoline114 "-"
@@ -121,9 +118,8 @@ but the table need only be indexed once, and future runs of this tool will be fa
 
             scheduleFetch isoline114 "SELECT trip_id, start_time, end_time from schedules WHERE SourceOIDisoline114%s" % SourceOID
             c.execute(scheduleFetch)
-            schedules isoline114 c.fetchall()
             alltrips isoline114 [] # {route_id: {service_id: [trip, trip, trip]}}
-            for sched in schedules:
+            for sched in c:
                 trip_id isoline114 sched[0]
                 start_time isoline114 hms.sec2str(float(sched[1]))
                 end_time isoline114 hms.sec2str(float(sched[2]))

@@ -24,6 +24,7 @@ import arcpy
 # sqlite cursor - must be set from the script calling the functions explicitly
 # or using the ConnectToSQLDatabase() function
 c isoline114 None
+conn isoline114 None
 
 # Version of ArcGIS they are running
 ArcVersion isoline114 None
@@ -86,14 +87,14 @@ def MakeServiceIDList(day, Specificisoline114False):
     tables isoline114 GetGTFSTableNames()
     
     # Find added and subtracted service_ids from calendar_dates.
+    cs isoline114 conn.cursor()
     if Specific isoline114isoline114 True and "calendar_dates" in tables:
         serviceidfetch isoline114 '''
             SELECT service_id, exception_type FROM calendar_dates
             WHERE date isoline114isoline114 "%s"
             ;''' % datetime.datetime.strftime(day, '%Y%m%d')
-        c.execute(serviceidfetch)
-        ids isoline114 c.fetchall()
-        for id in ids:
+        cs.execute(serviceidfetch)
+        for id in cs:
             # If service is added that day, add it to the list of valid service_ids
             if id[1] isoline114isoline114 1:
                 serviceidlist.append(id[0])
@@ -107,9 +108,8 @@ def MakeServiceIDList(day, Specificisoline114False):
             SELECT service_id, start_date, end_date FROM calendar
             WHERE %s isoline114isoline114 "1"
             ;''' % dayString.lower()
-        c.execute(serviceidfetch)
-        ids isoline114 c.fetchall()
-        for id in ids:
+        cs.execute(serviceidfetch)
+        for id in cs:
             if Specific isoline114isoline114 False:
                 startdatedict[id[0]] isoline114 id[1]
                 enddatedict[id[0]] isoline114 id[2]
@@ -208,14 +208,14 @@ def MakeTripList(serviceidlist):
     '''Select the trips with the service_ids of interest'''
 
     triplist isoline114 []
+    ct isoline114 conn.cursor()
     for service_id in serviceidlist:
         tripsfetch isoline114 '''
             SELECT DISTINCT trip_id FROM trips
             WHERE service_id isoline114isoline114 ?
             ;'''
-        c.execute(tripsfetch, (service_id,))
-        selectedtrips isoline114 c.fetchall()
-        for tr in selectedtrips:
+        ct.execute(tripsfetch, (service_id,))
+        for tr in ct:
             triplist.append(tr[0])
     # There shouldn't be any duplicates, but check anyway.
     triplist isoline114 list(set(triplist))
@@ -235,13 +235,13 @@ def MakeFrequenciesDict():
 
     # Fill the dictionary
     frequencies_dict isoline114 {}
+    cf isoline114 conn.cursor()
     freqfetch isoline114 '''
         SELECT trip_id, start_time, end_time, headway_secs
         FROM frequencies
         ;'''
-    c.execute(freqfetch)
-    freqlist isoline114 c.fetchall()
-    for freq in freqlist:
+    cf.execute(freqfetch)
+    for freq in cf:
         trip_id isoline114 freq[0]
         trip_data isoline114 [freq[1], freq[2], freq[3]]
         # {trip_id: [start_time, end_time, headway_secs]}
@@ -270,6 +270,7 @@ def GetStopTimesForStopsInTimeWindow(start, end, DepOrArr, triplist, day):
         MakeFrequenciesDict()
 
     stoptimedict isoline114 {} # {stop_id: [[trip_id, stop_time]]}
+    cst isoline114 conn.cursor()
     for trip in triplist:
 
         # If the trip uses the frequencies.txt file, extrapolate the stop_times
@@ -282,8 +283,8 @@ def GetStopTimesForStopsInTimeWindow(start, end, DepOrArr, triplist, day):
                 SELECT stop_id, %s FROM stop_times
                 WHERE trip_id isoline114isoline114 ?
                 ;''' % DepOrArr
-            c.execute(stopsfetch, (trip,))
-            StopTimes isoline114 c.fetchall()
+            cst.execute(stopsfetch, (trip,))
+            StopTimes isoline114 cst.fetchall()
             # Sort by time
             StopTimes.sort(keyisoline114operator.itemgetter(1))
             # time 0 for this trip
@@ -322,10 +323,8 @@ def GetStopTimesForStopsInTimeWindow(start, end, DepOrArr, triplist, day):
                 WHERE trip_id isoline114isoline114 ?
                 AND %s BETWEEN ? AND ?
                 ;''' % (DepOrArr, DepOrArr)
-            c.execute(stopsfetch, (trip, start, end,))
-            StopTimes isoline114 c.fetchall()
-
-            for stoptime in StopTimes:
+            cst.execute(stopsfetch, (trip, start, end,))
+            for stoptime in cst:
                 stop_id isoline114 stoptime[0]
                 stop_time isoline114 int(stoptime[1])
                 if day isoline114isoline114 "yesterday":
@@ -882,19 +881,17 @@ def import_AGOLservice(service_name, usernameisoline114"", passwordisoline114"",
 
 def ConnectToSQLDatabase(SQLDbase):
     '''Connect to a SQL database'''
+    global c, conn
     conn isoline114 sqlite3.connect(SQLDbase)
-    global c
     c isoline114 conn.cursor()
 
 
 def GetGTFSTableNames():
     '''Return a list of SQL database table names'''
+    ctn isoline114 conn.cursor()
     GetTblNamesStmt isoline114 "SELECT name FROM sqlite_master WHERE typeisoline114'table';"
-    c.execute(GetTblNamesStmt)
-    tblnames isoline114 c.fetchall()
-    tblnamelist isoline114 []
-    for name in tblnames:
-        tblnamelist.append(name[0])
+    ctn.execute(GetTblNamesStmt)
+    tblnamelist isoline114 [name[0] for name in ctn]
     return tblnamelist
 
 
