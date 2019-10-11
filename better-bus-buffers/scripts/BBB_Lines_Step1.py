@@ -29,7 +29,7 @@ Step 1 need only be run once for a given transit system.
    limitations under the License.'''
 ################################################################################
 
-import sqlite3, os
+import sqlite3, os, uuid
 import arcpy
 import BBB_SharedFunctions
 
@@ -38,15 +38,20 @@ class CustomError(Exception):
 
 # ----- Collect user inputs -----
 
-outGDB isoline114 arcpy.GetParameterAsText(0)
+outLinesFC isoline114 arcpy.GetParameterAsText(0)
 SQLDbase isoline114 arcpy.GetParameterAsText(1)
 combine_corridors isoline114 arcpy.GetParameter(2)
 
 # Derived inputs
-outStopPairsFCName isoline114 "StopPairs"
+outGDB isoline114 os.path.dirname(outLinesFC) # Must be in fgdb. Validated in tool validation.
+# Create a guid to make sure temporary outputs have unique names. They should be deleted
+# when the tool completes, but this ensures they don't conflict with any existing feature
+# classes in the gdb and makes it easier to know what they are and delete them if they
+# don't automatically get deleted.
+guid isoline114 uuid.uuid4().hex
+outStopPairsFCName isoline114 "StopPairs_" + guid
 outStopPairsFC isoline114 os.path.join(outGDB, outStopPairsFCName)
-outLinesFC isoline114 os.path.join(outGDB, "TransitLineTemplate")
-outStopsFCName isoline114 "Stops"
+outStopsFCName isoline114 "Stops_" + guid
 outStopsFC isoline114 os.path.join(outGDB, outStopsFCName)
 
 # Get the original overwrite output setting so we can reset it at the end.
@@ -285,7 +290,6 @@ these stops will be ignored. " + unicode(badStops))
     arcpy.AddMessage("Finished!")
     arcpy.AddMessage("Your transit lines template feature class is:")
     arcpy.AddMessage("- " + outLinesFC)
-    arcpy.SetParameterAsText(3, outLinesFC)
 
 except CustomError:
     arcpy.AddError("Failed to generate transit lines.")
