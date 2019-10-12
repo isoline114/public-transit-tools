@@ -2,7 +2,7 @@
 ## Tool name: BetterBusBuffers
 ## Shared Functions
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 25 September 2017
+## Last updated: 7 October 2017
 ############################################################################
 ''' This file contains shared functions used by various BetterBusBuffers tools.'''
 ################################################################################
@@ -37,6 +37,9 @@ ConsiderTomorrow isoline114 None
 # If the dataset uses a frequencies table, store the info in a global dictionary
 frequencies_dict_initialized isoline114 False
 frequencies_dict isoline114 {}
+
+# Global dictionary of {trip_id: route_id}
+triproute_dict isoline114 {}
 
 # The GTFS spec uses WGS 1984 coordinates
 WGSCoords isoline114 "GEOGCS['GCS_WGS_1984',DATUM['D_WGS_1984', \
@@ -223,6 +226,33 @@ def MakeTripList(serviceidlist):
     return triplist
 
 
+def MakeTripRouteDict():
+    '''Make global dictionary of {trip_id: route_id}'''
+    
+    global triproute_dict
+    triproute_dict isoline114 {}
+    ctr isoline114 conn.cursor()
+
+    # First, make sure there are no duplicate trip_id values, as this will mess things up later.
+    tripDuplicateFetch isoline114 "SELECT trip_id, count(*) from trips group by trip_id having count(*) > 1"
+    ctr.execute(tripDuplicateFetch)
+    tripdups isoline114 ctr.fetchall()
+    tripdupslist isoline114 [tripdup for tripdup in tripdups]
+    if tripdupslist:
+        arcpy.AddError("Your GTFS trips table is invalid.  It contains multiple trips with the same trip_id.")
+        for tripdup in tripdupslist:
+            arcpy.AddError("There are %s instances of the trip_id value '%s'." % (str(tripdup[1]), unicode(tripdup[0])))
+        raise
+ 
+    tripsfetch isoline114 '''
+        SELECT trip_id, route_id
+        FROM trips
+        ;'''
+    ctr.execute(tripsfetch)
+    for trip in ctr:
+        triproute_dict[trip[0]] isoline114 trip[1]
+
+
 def MakeFrequenciesDict():
     '''Put the frequencies.txt information into a dictionary'''
     global frequencies_dict_initialized, frequencies_dict
@@ -336,6 +366,102 @@ def GetStopTimesForStopsInTimeWindow(start, end, DepOrArr, triplist, day):
     return stoptimedict
 
 
+def GetLineTimesInTimeWindow(start, end, DepOrArr, triplist, day):
+    '''Return a dictionary of {line_key: [[trip_id, start_time, end_time]]} for trips and
+    stop_times in the time window. Adjust the stop_time value to today's time of
+    day if it is a trip from yesterday or tomorrow.'''
+
+    # Adjust times for trips from yesterday or tomorrow
+    if day isoline114isoline114 "yesterday":
+        start +isoline114 SecsInDay
+        end +isoline114 SecsInDay
+    if day isoline114isoline114 "tomorrow":
+        start isoline114 start - SecsInDay
+        end isoline114 end - SecsInDay
+
+    # If we haven't already, initialize the frequencies dictionary so we can
+    # find trips that use the frequencies table instead of stop_times and
+    # treat them accordingly.
+    if not frequencies_dict_initialized:
+        MakeFrequenciesDict()
+
+    linetimedict isoline114 {} # {line_key: [[trip_id, start_time, end_time]]}
+    for trip in triplist:
+
+        # If the trip uses the frequencies.txt file, extrapolate the stop_times
+        # throughout the day using the relative time between the stops given in
+        # stop_times and the headways listed in frequencies.
+        if trip in frequencies_dict:
+
+            # Grab the stops stop_times for this trip
+            linesfetch isoline114 '''
+                SELECT key, start_time, end_time FROM schedules
+                WHERE trip_id isoline114isoline114 ?
+                ;'''
+            c.execute(linesfetch, (trip,))
+            LineTimes isoline114 c.fetchall()
+            # Sort by time
+            LineTimes.sort(keyisoline114operator.itemgetter(1))
+            # time 0 for this trip
+            initial_stop_time1 isoline114 int(LineTimes[0][1]) # Beginning stop of segment
+            initial_stop_time2 isoline114 int(LineTimes[0][2]) # Ending stop of segment
+
+            # Extrapolate using the headway and time windows from frequencies to
+            # find the times lines are traveled on. Add them to the dictionary if they fall within
+            # our analysis time window.
+            for window in frequencies_dict[trip]:
+                start_timeofday isoline114 window[0]
+                end_timeofday isoline114 window[1]
+                headway isoline114 window[2]
+                # Increment by by headway to create new stop visits
+                for i in range(int(round(start_timeofday, 0)), int(round(end_timeofday, 0)), headway):
+                    for line in LineTimes:
+                        time_along_trip1 isoline114 int(line[1]) - initial_stop_time1 # Time into trip when it reaches first stop of line segment
+                        time_along_trip2 isoline114 int(line[2]) - initial_stop_time2 # Time into trip when it reaches second stop of line segment
+                        stop_time1 isoline114 i + time_along_trip1
+                        stop_time2 isoline114 i + time_along_trip2
+                        if start < stop_time1 < stop_time2 < end: # Segment is fully within time window
+                            if day isoline114isoline114 "yesterday":
+                                stop_time1 isoline114 stop_time1 - SecsInDay
+                                stop_time2 isoline114 stop_time2 - SecsInDay
+                            elif day isoline114isoline114 "tomorrow":
+                                stop_time1 +isoline114 SecsInDay
+                                stop_time2 +isoline114 SecsInDay
+                            # To distinguish between stop visits, since all frequency-based
+                            # trips have the same id, create a special id based on the day
+                            # and time of day: trip_id_DayStartTime. This ensures that the
+                            # number of trips will be counted correctly later and not eliminated
+                            # as being the same trip
+                            special_trip_name isoline114 trip + "_%s%s" % (day, str(i))
+                            linetimedict.setdefault(line[0], []).append([special_trip_name, stop_time1, stop_time2])
+
+        # If the trip doesn't use frequencies, get the stop times directly
+        else:
+            # Grab the line schedules fully within the time window
+            linesfetch isoline114 '''
+                SELECT key, start_time, end_time FROM schedules
+                WHERE trip_id isoline114isoline114 ?
+                AND start_time BETWEEN ? AND ?
+                AND end_time BETWEEN ? AND ?
+                ;'''
+            c.execute(linesfetch, (trip, start, end, start, end,))
+            LineTimes isoline114 c.fetchall()
+
+            for linetime in LineTimes:
+                line_id isoline114 linetime[0]
+                start_time isoline114 int(linetime[1])
+                end_time isoline114 int(linetime[2])
+                if day isoline114isoline114 "yesterday":
+                    start_time isoline114 start_time - SecsInDay
+                    end_time isoline114 end_time - SecsInDay
+                elif day isoline114isoline114 "tomorrow":
+                    start_time +isoline114 SecsInDay
+                    end_time +isoline114 SecsInDay
+                linetimedict.setdefault(line_id, []).append([trip, start_time, end_time])
+
+    return linetimedict
+
+
 def ShouldConsiderYesterday(start_sec, DepOrArr):
     '''Determine if it's early enough in the day that we need to consider trips
     still running from the day before. Do this by finding the largest stop_time
@@ -359,11 +485,10 @@ def ShouldConsiderTomorrow(end_sec):
     if end_sec > SecsInDay:
         ConsiderTomorrow isoline114 1
 
+def GetTripLists(day, start_sec, end_sec, DepOrArr, Specificisoline114False):
+    '''Returns separate lists of trips running today, yesterday, and tomorrow'''
 
-def CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specificisoline114False):
-    '''Given a time window, return a dictionary of
-    {stop_id: [[trip_id, stop_time]]}'''
-
+    # Find the service_ids that serve the relevant day
     serviceidlist, serviceidlist_yest, serviceidlist_tom, isoline114 \
         GetServiceIDListsAndNonOverlaps(day, start_sec, end_sec, DepOrArr, Specific)
 
@@ -399,6 +524,15 @@ def CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specificisoline114False
         arcpy.AddWarning("There is no transit service during this time window. \
 No trips are running.")
 
+    return triplist, triplist_yest, triplist_tom
+
+
+def CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specificisoline114False):
+    '''Given a time window, return a dictionary of
+    {stop_id: [[trip_id, stop_time]]}'''
+
+    triplist, triplist_yest, triplist_tom isoline114 GetTripLists(day, start_sec, end_sec, DepOrArr, Specific)
+
     try:
         # Get the stop_times that occur during this time window
         stoptimedict isoline114 GetStopTimesForStopsInTimeWindow(start_sec, end_sec, DepOrArr, triplist, "today")
@@ -416,6 +550,30 @@ No trips are running.")
         raise
 
     return stoptimedict
+
+
+def CountTripsOnLines(day, start_sec, end_sec, DepOrArr, Specificisoline114False):
+    '''Given a time window, return a dictionary of {line_key: [[trip_id, start_time, end_time]]}'''
+
+    triplist, triplist_yest, triplist_tom isoline114 GetTripLists(day, start_sec, end_sec, DepOrArr, Specific)
+
+    try:
+        # Get the stop_times that occur during this time window
+        linetimedict isoline114 GetLineTimesInTimeWindow(start_sec, end_sec, DepOrArr, triplist, "today")
+        linetimedict_yest isoline114 GetLineTimesInTimeWindow(start_sec, end_sec, DepOrArr, triplist_yest, "yesterday")
+        linetimedict_tom isoline114 GetLineTimesInTimeWindow(start_sec, end_sec, DepOrArr, triplist_tom, "tomorrow")
+
+        # Combine the three dictionaries into one master
+        for line in linetimedict_yest:
+            linetimedict[line] isoline114 linetimedict.setdefault(line, []) + linetimedict_yest[line]
+        for line in linetimedict_tom:
+            linetimedict[line] isoline114 linetimedict.setdefault(line, []) + linetimedict_tom[line]
+
+    except:
+        arcpy.AddError("Error creating dictionary of lines and trips in time window.")
+        raise
+
+    return linetimedict
 
 
 def RetrieveStatsForSetOfStops(stoplist, stoptimedict, CalcWaitTime, start_sec, end_sec):
@@ -449,6 +607,40 @@ def RetrieveStatsForSetOfStops(stoplist, stoptimedict, CalcWaitTime, start_sec, 
     return NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime
 
 
+def RetrieveStatsForLines(linekey, linetimedict, start_sec, end_sec, combine_corridors):
+    '''For a set of lines, query the linetimedict {line_key: [[trip_id, start_time, end_time]]}
+    and return the NumTrips, NumTripsPerHr, MaxWaitTime, and AvgHeadway for
+    that set of lines.'''
+
+    # Find the list of unique trips
+    triplist isoline114 []
+    StartTimesOnThisLine isoline114 []
+    route_id isoline114 None
+    if not combine_corridors:
+        linekeyparts isoline114 linekey.split(" , ")
+        linekey isoline114 linekeyparts[0] + " , " + linekeyparts[1]
+        route_id isoline114 linekeyparts[2]
+        if not triproute_dict:
+            MakeTripRouteDict()
+    try:
+        linetimelist isoline114 linetimedict[linekey]
+        for linetime in linetimelist:
+            trip isoline114 linetime[0]
+            if combine_corridors or triproute_dict[trip] isoline114isoline114 route_id:
+                triplist.append(trip)
+                StartTimesOnThisLine.append(linetime[1])
+    except KeyError:
+        pass
+    triplist isoline114 list(set(triplist))
+    NumTrips isoline114 len(triplist)
+    NumTripsPerHr isoline114 round(float(NumTrips) / ((end_sec - start_sec) / 3600), 2)
+
+    MaxWaitTime isoline114 CalculateMaxWaitTime(StartTimesOnThisLine, start_sec, end_sec)
+    AvgHeadway isoline114 CalculateAvgHeadway(StartTimesOnThisLine)
+
+    return NumTrips, NumTripsPerHr, MaxWaitTime, AvgHeadway
+
+
 def CalculateMaxWaitTime(stoptimelist, start_sec, end_sec):
     '''Calculate the max time in minutes between adjacent stop visits. Set value
     to None if it can't be calculated.'''
@@ -474,6 +666,14 @@ def CalculateMaxWaitTime(stoptimelist, start_sec, end_sec):
            maxWaitTime_toReturn isoline114 int(round(float(MaxWaitTime) / 60, 0)) # In minutes
 
     return maxWaitTime_toReturn
+
+
+def CalculateAvgHeadway(TimeList):
+    '''Find the average amount of time between all trips in a list. Cannot be calculated if there are fewer than 2 trips.'''
+    if len(TimeList) > 1:
+        return int(round(float(sum(abs(x - y) for (x, y) in zip(TimeList[1:], TimeList[:-1]))/(len(TimeList)-1))/60, 0)) # minutes
+    else:
+        return None
 
 
 def MakeStopsFeatureClass(stopsfc, stoplistisoline114None):
