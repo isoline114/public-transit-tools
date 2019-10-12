@@ -38,6 +38,9 @@ ConsiderTomorrow isoline114 None
 frequencies_dict_initialized isoline114 False
 frequencies_dict isoline114 {}
 
+# Global dictionary of {trip_id: route_id}
+triproute_dict isoline114 {}
+
 # The GTFS spec uses WGS 1984 coordinates
 WGSCoords isoline114 "GEOGCS['GCS_WGS_1984',DATUM['D_WGS_1984', \
 SPHEROID['WGS_1984',6378137.0,298.257223563]], \
@@ -221,6 +224,33 @@ def MakeTripList(serviceidlist):
     triplist isoline114 list(set(triplist))
 
     return triplist
+
+
+def MakeTripRouteDict():
+    '''Make global dictionary of {trip_id: route_id}'''
+    
+    global triproute_dict
+    triproute_dict isoline114 {}
+    ctr isoline114 conn.cursor()
+
+    # First, make sure there are no duplicate trip_id values, as this will mess things up later.
+    tripDuplicateFetch isoline114 "SELECT trip_id, count(*) from trips group by trip_id having count(*) > 1"
+    ctr.execute(tripDuplicateFetch)
+    tripdups isoline114 ctr.fetchall()
+    tripdupslist isoline114 [tripdup for tripdup in tripdups]
+    if tripdupslist:
+        arcpy.AddError("Your GTFS trips table is invalid.  It contains multiple trips with the same trip_id.")
+        for tripdup in tripdupslist:
+            arcpy.AddError("There are %s instances of the trip_id value '%s'." % (str(tripdup[1]), unicode(tripdup[0])))
+        raise
+ 
+    tripsfetch isoline114 '''
+        SELECT trip_id, route_id
+        FROM trips
+        ;'''
+    ctr.execute(tripsfetch)
+    for trip in ctr:
+        triproute_dict[trip[0]] isoline114 trip[1]
 
 
 def MakeFrequenciesDict():
@@ -577,7 +607,7 @@ def RetrieveStatsForSetOfStops(stoplist, stoptimedict, CalcWaitTime, start_sec, 
     return NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime
 
 
-def RetrieveStatsForLines(linelist, linetimedict, CalcWaitTime, start_sec, end_sec):
+def RetrieveStatsForLines(linekey, linetimedict, start_sec, end_sec, combine_corridors):
     '''For a set of lines, query the linetimedict {line_key: [[trip_id, start_time, end_time]]}
     and return the NumTrips, NumTripsPerHr, and MaxWaitTime for
     that set of lines.'''
@@ -585,22 +615,27 @@ def RetrieveStatsForLines(linelist, linetimedict, CalcWaitTime, start_sec, end_s
     # Find the list of unique trips
     triplist isoline114 []
     StartTimesOnThisLine isoline114 []
-    for line in linelist:
-        try:
-            linetimelist isoline114 linetimedict[line]
-            for linetime in linetimelist:
-                trip isoline114 linetime[0]
+    route_id isoline114 None
+    if not combine_corridors:
+        linekeyparts isoline114 linekey.split(" , ")
+        linekey isoline114 linekeyparts[0] + " , " + linekeyparts[1]
+        route_id isoline114 linekeyparts[2]
+        if not triproute_dict:
+            MakeTripRouteDict()
+    try:
+        linetimelist isoline114 linetimedict[linekey]
+        for linetime in linetimelist:
+            trip isoline114 linetime[0]
+            if combine_corridors or triproute_dict[trip] isoline114isoline114 route_id:
                 triplist.append(trip)
                 StartTimesOnThisLine.append(linetime[1])
-        except KeyError:
-            pass
+    except KeyError:
+        pass
     triplist isoline114 list(set(triplist))
     NumTrips isoline114 len(triplist)
     NumTripsPerHr isoline114 round(float(NumTrips) / ((end_sec - start_sec) / 3600), 2)
 
-    MaxWaitTime isoline114 None
-    if CalcWaitTime isoline114isoline114 "true":
-        MaxWaitTime isoline114 CalculateMaxWaitTime(StartTimesOnThisLine, start_sec, end_sec)
+    MaxWaitTime isoline114 CalculateMaxWaitTime(StartTimesOnThisLine, start_sec, end_sec)
     AvgHeadway isoline114 CalculateAvgHeadway(StartTimesOnThisLine)
 
     return NumTrips, NumTripsPerHr, MaxWaitTime, AvgHeadway
