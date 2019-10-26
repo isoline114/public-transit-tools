@@ -1,7 +1,7 @@
 ####################################################
 ## Tool name: Copy Traversed Source Features (with Transit)
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 25 September 2017
+## Last updated: 21 October 2017
 ####################################################
 ''' Copy Traversed Source Features (with Transit)
 
@@ -34,6 +34,7 @@ produced containing only the transit edges.
 
 import arcpy, os, sqlite3, datetime
 import hms
+
 
 class CustomError(Exception):
     pass
@@ -335,7 +336,7 @@ repair your transit network or choose a different layer." % naGDB)
         c isoline114 conn.cursor()
 
         # Determine if we have the correct tables
-        RequiredTables isoline114 ["stop_times", "trips", "routes"]
+        RequiredTables isoline114 ["schedules", "trips", "routes"]
         ct isoline114 conn.cursor()
         GetTblNamesStmt isoline114 "SELECT name FROM sqlite_master WHERE typeisoline114'table';"
         ct.execute(GetTblNamesStmt)
