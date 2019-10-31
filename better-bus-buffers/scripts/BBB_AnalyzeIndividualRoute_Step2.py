@@ -107,7 +107,7 @@ fields %s. Please choose a valid feature class." % (FC, str(RequiredFields)))
 
         # SQL database of preprocessed GTFS from Step 1
         SQLDbase isoline114 arcpy.GetParameterAsText(1)
-        conn isoline114 sqlite3.connect(SQLDbase)
+        conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
         c isoline114 BBB_SharedFunctions.c isoline114 conn.cursor()
 
         # Weekday or specific date to analyze.
