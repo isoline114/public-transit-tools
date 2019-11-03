@@ -1,4 +1,4 @@
-#Display GTFS in ArcGIS User's Guide
+# Display GTFS in ArcGIS User's Guide
 
 Created by isoline114, Esri  
 Contact: <hello@isoline.tech>
