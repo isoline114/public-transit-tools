@@ -122,7 +122,7 @@ You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
 
         # GTFS SQL dbase - must be created ahead of time.
         SQLDbase isoline114 arcpy.GetParameterAsText(0)
-        conn isoline114 sqlite3.connect(SQLDbase)
+        conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
         c isoline114 BBB_SharedFunctions.c isoline114 conn.cursor()
 
         # Weekday or specific date to analyze.
