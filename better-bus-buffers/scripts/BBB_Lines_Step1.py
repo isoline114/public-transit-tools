@@ -38,213 +38,211 @@ class CustomError(Exception):
 
 # ----- Collect user inputs -----
 
-outLinesFC isoline114 arcpy.GetParameterAsText(0)
-SQLDbase isoline114 arcpy.GetParameterAsText(1)
-combine_corridors isoline114 arcpy.GetParameter(2)
+def runTool(outLinesFC, SQLDbase, combine_corridors):
 
-# Derived inputs
-outGDB isoline114 os.path.dirname(outLinesFC) # Must be in fgdb. Validated in tool validation.
-# Create a guid to make sure temporary outputs have unique names. They should be deleted
-# when the tool completes, but this ensures they don't conflict with any existing feature
-# classes in the gdb and makes it easier to know what they are and delete them if they
-# don't automatically get deleted.
-guid isoline114 uuid.uuid4().hex
-outStopPairsFCName isoline114 "StopPairs_" + guid
-outStopPairsFC isoline114 os.path.join(outGDB, outStopPairsFCName)
+    # Derived inputs
+    outGDB isoline114 os.path.dirname(outLinesFC) # Must be in fgdb. Validated in tool validation.
+    # Create a guid to make sure temporary outputs have unique names. They should be deleted
+    # when the tool completes, but this ensures they don't conflict with any existing feature
+    # classes in the gdb and makes it easier to know what they are and delete them if they
+    # don't automatically get deleted.
+    guid isoline114 uuid.uuid4().hex
+    outStopPairsFCName isoline114 "StopPairs_" + guid
+    outStopPairsFC isoline114 os.path.join(outGDB, outStopPairsFCName)
 
-# Get the original overwrite output setting so we can reset it at the end.
-OverwriteOutput isoline114 arcpy.env.overwriteOutput
-# It's okay to overwrite stuff in this tool
-arcpy.env.overwriteOutput isoline114 True
+    # Get the original overwrite output setting so we can reset it at the end.
+    OverwriteOutput isoline114 arcpy.env.overwriteOutput
+    # It's okay to overwrite stuff in this tool
+    arcpy.env.overwriteOutput isoline114 True
 
 
-try:
+    try:
 
-    # Figure out what version of ArcGIS they're running
-    BBB_SharedFunctions.DetermineArcVersion()
-    if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
-        arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
-You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
-        raise CustomError
-    if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
-        arcpy.AddError("You must have ArcGIS 10.1 or higher (or ArcGIS Pro) to run this \
-tool. You have ArcGIS version %s." % BBB_SharedFunctions.ArcVersion)
-        raise CustomError
-
-
-# ----- Connect to SQL locally for further queries and entries -----
-
-    # Connect to the SQL database
-    conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
+        # Figure out what version of ArcGIS they're running
+        BBB_SharedFunctions.DetermineArcVersion()
+        if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
+            arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
+    You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
+            raise CustomError
+        if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
+            arcpy.AddError("You must have ArcGIS 10.1 or higher (or ArcGIS Pro) to run this \
+    tool. You have ArcGIS version %s." % BBB_SharedFunctions.ArcVersion)
+            raise CustomError
 
 
-# ----- Make dictionary of {trip_id: route_id} -----
+    # ----- Connect to SQL locally for further queries and entries -----
 
-    BBB_SharedFunctions.MakeTripRouteDict()
-
-
-# ----- Initialize a dictionary of stop geometry -----
-
-    # Get the stops table (exclude parent stations and station entrances)
-    c isoline114 conn.cursor()
-    selectstoptablestmt isoline114 "SELECT stop_id, stop_lat, stop_lon, location_type FROM stops;"
-    c.execute(selectstoptablestmt)
-
-    # Initialize a dictionary of stop lat/lon
-    # {stop_id: <stop geometry object>} in the output coordinate system
-    stoplatlon_dict isoline114 {}
-    for stop in c:
-        stop_id isoline114 stop[0]
-        stop_lat isoline114 stop[1]
-        stop_lon isoline114 stop[2]
-        location_type isoline114 stop[3]
-        if location_type not in [0, '0', None, ""]:
-            # Skip parent stations and station entrances
-            continue
-        pt isoline114 arcpy.Point()
-        pt.X isoline114 float(stop_lon)
-        pt.Y isoline114 float(stop_lat)
-        # GTFS stop lat/lon is written in WGS1984
-        ptGeometry isoline114 arcpy.PointGeometry(pt, BBB_SharedFunctions.WGSCoords)
-        stoplatlon_dict[stop_id] isoline114 ptGeometry
+        # Connect to the SQL database
+        conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
 
 
-# ----- Obtain schedule info from the stop_times.txt file and convert it to a line-based model -----
+    # ----- Make dictionary of {trip_id: route_id} -----
 
-    arcpy.AddMessage("Obtaining and processing transit schedule and line information...")
-    arcpy.AddMessage("(This will take a few minutes for large datasets.)")
+        BBB_SharedFunctions.MakeTripRouteDict()
 
-    # Create a line-based schedule table
-    c2 isoline114 conn.cursor()
-    c2.execute("DROP TABLE IF EXISTS schedules;")
-    c2.execute("CREATE TABLE schedules (key TEXT, start_time REAL, end_time REAL, trip_id TEXT);")
 
-    # Find pairs of directly-connected stops
-    linefeature_dict isoline114 {}
-    stoptimefetch isoline114 '''
-    SELECT trip_id, stop_id, arrival_time, departure_time
-    FROM stop_times
-    ORDER BY trip_id, stop_sequence
-    ;'''
-    c.execute(stoptimefetch)
-    current_trip isoline114 None
-    previous_stop isoline114 None
-    start_time isoline114 None
-    end_time isoline114 None
-    for st in c:
-        trip_id isoline114 st[0]
-        stop_id isoline114 st[1]
-        arrival_time isoline114 st[2]
-        departure_time isoline114 st[3]
-        if trip_id !isoline114 current_trip:
-            current_trip isoline114 trip_id
+    # ----- Initialize a dictionary of stop geometry -----
+
+        # Get the stops table (exclude parent stations and station entrances)
+        c isoline114 conn.cursor()
+        selectstoptablestmt isoline114 "SELECT stop_id, stop_lat, stop_lon, location_type FROM stops;"
+        c.execute(selectstoptablestmt)
+
+        # Initialize a dictionary of stop lat/lon
+        # {stop_id: <stop geometry object>} in the output coordinate system
+        stoplatlon_dict isoline114 {}
+        for stop in c:
+            stop_id isoline114 stop[0]
+            stop_lat isoline114 stop[1]
+            stop_lon isoline114 stop[2]
+            location_type isoline114 stop[3]
+            if location_type not in [0, '0', None, ""]:
+                # Skip parent stations and station entrances
+                continue
+            pt isoline114 arcpy.Point()
+            pt.X isoline114 float(stop_lon)
+            pt.Y isoline114 float(stop_lat)
+            # GTFS stop lat/lon is written in WGS1984
+            ptGeometry isoline114 arcpy.PointGeometry(pt, BBB_SharedFunctions.WGSCoords)
+            stoplatlon_dict[stop_id] isoline114 ptGeometry
+
+
+    # ----- Obtain schedule info from the stop_times.txt file and convert it to a line-based model -----
+
+        arcpy.AddMessage("Obtaining and processing transit schedule and line information...")
+        arcpy.AddMessage("(This will take a few minutes for large datasets.)")
+
+        # Create a line-based schedule table
+        c2 isoline114 conn.cursor()
+        c2.execute("DROP TABLE IF EXISTS schedules;")
+        c2.execute("CREATE TABLE schedules (key TEXT, start_time REAL, end_time REAL, trip_id TEXT);")
+
+        # Find pairs of directly-connected stops
+        linefeature_dict isoline114 {}
+        stoptimefetch isoline114 '''
+        SELECT trip_id, stop_id, arrival_time, departure_time
+        FROM stop_times
+        ORDER BY trip_id, stop_sequence
+        ;'''
+        c.execute(stoptimefetch)
+        current_trip isoline114 None
+        previous_stop isoline114 None
+        start_time isoline114 None
+        end_time isoline114 None
+        for st in c:
+            trip_id isoline114 st[0]
+            stop_id isoline114 st[1]
+            arrival_time isoline114 st[2]
+            departure_time isoline114 st[3]
+            if trip_id !isoline114 current_trip:
+                current_trip isoline114 trip_id
+                previous_stop isoline114 stop_id
+                start_time isoline114 departure_time # Start time of segment is the departure time from the stop
+                continue
+            start_stop isoline114 previous_stop
+            end_stop isoline114 stop_id
+            end_time isoline114 arrival_time
+            SourceOIDkey isoline114 "%s , %s" % (start_stop, end_stop)
+            if combine_corridors:
+                # All trips between each pair of stops will be combined, regardless of route_id
+                linefeature_dict[SourceOIDkey] isoline114 True
+            else:
+                # A separate line will be created for each separate route between the same two stops
+                linefeature_dict[SourceOIDkey + " , " + BBB_SharedFunctions.triproute_dict[trip_id]] isoline114 True
+            stmt isoline114 """INSERT INTO schedules (key, start_time, end_time, trip_id) VALUES ('%s', %s, %s, '%s');""" % (SourceOIDkey, start_time, end_time, trip_id)
+            c2.execute(stmt)
             previous_stop isoline114 stop_id
-            start_time isoline114 departure_time # Start time of segment is the departure time from the stop
-            continue
-        start_stop isoline114 previous_stop
-        end_stop isoline114 stop_id
-        end_time isoline114 arrival_time
-        SourceOIDkey isoline114 "%s , %s" % (start_stop, end_stop)
-        if combine_corridors:
-            # All trips between each pair of stops will be combined, regardless of route_id
-            linefeature_dict[SourceOIDkey] isoline114 True
-        else:
-            # A separate line will be created for each separate route between the same two stops
-            linefeature_dict[SourceOIDkey + " , " + BBB_SharedFunctions.triproute_dict[trip_id]] isoline114 True
-        stmt isoline114 """INSERT INTO schedules (key, start_time, end_time, trip_id) VALUES ('%s', %s, %s, '%s');""" % (SourceOIDkey, start_time, end_time, trip_id)
-        c2.execute(stmt)
-        previous_stop isoline114 stop_id
-        start_time isoline114 departure_time
-    conn.commit()
-    c2.execute("CREATE INDEX schedules_index_tripsstend ON schedules (trip_id, start_time, end_time);")
-    conn.commit()
+            start_time isoline114 departure_time
+        conn.commit()
+        c2.execute("CREATE INDEX schedules_index_tripsstend ON schedules (trip_id, start_time, end_time);")
+        conn.commit()
 
 
-    # ----- Write pairs to a points feature class (this is intermediate and will NOT go into the final output) -----
+        # ----- Write pairs to a points feature class (this is intermediate and will NOT go into the final output) -----
 
-    # Create a points feature class for the point pairs.
-    arcpy.management.CreateFeatureclass(outGDB, outStopPairsFCName, "POINT", "", "", "", BBB_SharedFunctions.WGSCoords)
-    arcpy.management.AddField(outStopPairsFC, "stop_id", "TEXT")
-    arcpy.management.AddField(outStopPairsFC, "pair_id", "TEXT")
-    arcpy.management.AddField(outStopPairsFC, "sequence", "SHORT")
+        # Create a points feature class for the point pairs.
+        arcpy.management.CreateFeatureclass(outGDB, outStopPairsFCName, "POINT", "", "", "", BBB_SharedFunctions.WGSCoords)
+        arcpy.management.AddField(outStopPairsFC, "stop_id", "TEXT")
+        arcpy.management.AddField(outStopPairsFC, "pair_id", "TEXT")
+        arcpy.management.AddField(outStopPairsFC, "sequence", "SHORT")
 
-    # Add pairs of stops to the feature class in preparation for generating line features
-    badStops isoline114 []
-    badkeys isoline114 []
-    with arcpy.da.InsertCursor(outStopPairsFC, ["SHAPE@", "stop_id", "pair_id", "sequence"]) as cur:
-        # linefeature_dict isoline114 {"start_stop , end_stop , route_type": True}
-        for SourceOIDkey in linefeature_dict:
-            stopPair isoline114 SourceOIDkey.split(" , ")
-            # {stop_id: [stop_lat, stop_lon]}
-            try:
-                stop1 isoline114 stopPair[0]
-                stop1_geom isoline114 stoplatlon_dict[stop1]
-            except KeyError:
-                badStops.append(stop1)
-                badkeys.append(SourceOIDkey)
-                continue
-            try:
-                stop2 isoline114 stopPair[1]
-                stop2_geom isoline114 stoplatlon_dict[stop2]
-            except KeyError:
-                badStops.append(stop2)
-                badkeys.append(SourceOIDkey)
-                continue
-            cur.insertRow((stop1_geom, stop1, SourceOIDkey, 1))
-            cur.insertRow((stop2_geom, stop2, SourceOIDkey, 2))
+        # Add pairs of stops to the feature class in preparation for generating line features
+        badStops isoline114 []
+        badkeys isoline114 []
+        with arcpy.da.InsertCursor(outStopPairsFC, ["SHAPE@", "stop_id", "pair_id", "sequence"]) as cur:
+            # linefeature_dict isoline114 {"start_stop , end_stop , route_type": True}
+            for SourceOIDkey in linefeature_dict:
+                stopPair isoline114 SourceOIDkey.split(" , ")
+                # {stop_id: [stop_lat, stop_lon]}
+                try:
+                    stop1 isoline114 stopPair[0]
+                    stop1_geom isoline114 stoplatlon_dict[stop1]
+                except KeyError:
+                    badStops.append(stop1)
+                    badkeys.append(SourceOIDkey)
+                    continue
+                try:
+                    stop2 isoline114 stopPair[1]
+                    stop2_geom isoline114 stoplatlon_dict[stop2]
+                except KeyError:
+                    badStops.append(stop2)
+                    badkeys.append(SourceOIDkey)
+                    continue
+                cur.insertRow((stop1_geom, stop1, SourceOIDkey, 1))
+                cur.insertRow((stop2_geom, stop2, SourceOIDkey, 2))
 
-    if badStops:
-        badStops isoline114 list(set(badStops))
-        arcpy.AddWarning("Your stop_times.txt lists times for the following \
-stops which are not included in your stops.txt file. Schedule information for \
-these stops will be ignored. " + unicode(badStops))
+        if badStops:
+            badStops isoline114 list(set(badStops))
+            arcpy.AddWarning("Your stop_times.txt lists times for the following \
+    stops which are not included in your stops.txt file. Schedule information for \
+    these stops will be ignored. " + unicode(badStops))
 
-    # Remove these entries from the linefeatures dictionary so it doesn't cause false records later
-    if badkeys:
-        badkeys isoline114 list(set(badkeys))
-        for key in badkeys:
-            del linefeature_dict[key]
+        # Remove these entries from the linefeatures dictionary so it doesn't cause false records later
+        if badkeys:
+            badkeys isoline114 list(set(badkeys))
+            for key in badkeys:
+                del linefeature_dict[key]
 
-# ----- Generate lines between all stops (for the final output) -----
+    # ----- Generate lines between all stops (for the final output) -----
 
-    arcpy.management.PointsToLine(outStopPairsFC, outLinesFC, "pair_id", "sequence")
-    if not combine_corridors:
-        arcpy.management.AddField(outLinesFC, "route_id", "TEXT")
+        arcpy.management.PointsToLine(outStopPairsFC, outLinesFC, "pair_id", "sequence")
+        if not combine_corridors:
+            arcpy.management.AddField(outLinesFC, "route_id", "TEXT")
 
-    # We don't need the points for anything anymore, so delete them.
-    arcpy.management.Delete(outStopPairsFC)
+        # We don't need the points for anything anymore, so delete them.
+        arcpy.management.Delete(outStopPairsFC)
 
-    # Clean up lines with 0 length.  They will just produce build errors and
-    # are not valuable for visualization anyway.
-    expression isoline114 """"Shape_Length" isoline114 0"""
-    with arcpy.da.UpdateCursor(outLinesFC, ["pair_id"], expression) as cur2:
-        for row in cur2:
-            del linefeature_dict[row[0]]
-            cur2.deleteRow()
+        # Clean up lines with 0 length.  They will just produce build errors and
+        # are not valuable for visualization anyway.
+        expression isoline114 """"Shape_Length" isoline114 0"""
+        with arcpy.da.UpdateCursor(outLinesFC, ["pair_id"], expression) as cur2:
+            for row in cur2:
+                del linefeature_dict[row[0]]
+                cur2.deleteRow()
 
-    if not combine_corridors:
-        with arcpy.da.UpdateCursor(outLinesFC, ["pair_id", "route_id"]) as cur4:
-            for row in cur4:
-                row[1] isoline114 row[0].split(" , ")[2]
-                cur4.updateRow(row)
+        if not combine_corridors:
+            with arcpy.da.UpdateCursor(outLinesFC, ["pair_id", "route_id"]) as cur4:
+                for row in cur4:
+                    row[1] isoline114 row[0].split(" , ")[2]
+                    cur4.updateRow(row)
 
 
-# ----- Finish up. -----
+    # ----- Finish up. -----
 
-    conn.close()
+        conn.close()
 
-    arcpy.AddMessage("Finished!")
-    arcpy.AddMessage("Your transit lines template feature class is:")
-    arcpy.AddMessage("- " + outLinesFC)
+        arcpy.AddMessage("Finished!")
+        arcpy.AddMessage("Your transit lines template feature class is:")
+        arcpy.AddMessage("- " + outLinesFC)
 
-except CustomError:
-    arcpy.AddError("Failed to generate transit lines.")
-    pass
+    except CustomError:
+        arcpy.AddError("Failed to generate transit lines.")
+        pass
 
-except:
-    arcpy.AddError("Failed to generate transit lines.")
-    raise
+    except:
+        arcpy.AddError("Failed to generate transit lines.")
+        raise
 
-finally:
-    # Reset the overwrite output to the user's original setting
-    arcpy.env.overwriteOutput isoline114 OverwriteOutput
+    finally:
+        # Reset the overwrite output to the user's original setting
+        arcpy.env.overwriteOutput isoline114 OverwriteOutput

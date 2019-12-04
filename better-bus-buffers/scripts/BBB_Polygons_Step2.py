@@ -41,210 +41,205 @@ class CustomError(Exception):
 OverwriteOutput isoline114 None
 
 
-try:
-
-    # ----- Set up the run -----
+def runTool(inStep1GDB, outFile, day, start_time, end_time, TravelFromTo):
     try:
-        # Figure out what version of ArcGIS they're running
-        BBB_SharedFunctions.DetermineArcVersion()
-        if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
-            arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
-You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
-            raise CustomError
-        
-        # Get the files from Step 1 to work with.
-        inStep1GDB isoline114 arcpy.GetParameterAsText(0)
-        # Step1_GTFS.sql and Step1_FlatPolys must exist in order for the tool to run.
-        # Their existence is checked in the GUI validation logic.
-        FlatPolys isoline114 os.path.join(inStep1GDB, "Step1_FlatPolys")
-        SQLDbase isoline114 os.path.join(inStep1GDB, "Step1_GTFS.sql")
-        # Connect to the SQL database
-        conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
-        c isoline114 BBB_SharedFunctions.c isoline114 conn.cursor()
 
-        # Output file designated by user
-        outFile isoline114 arcpy.GetParameterAsText(1)
-        outDir isoline114 os.path.dirname(outFile)
-        outFilename isoline114 os.path.basename(outFile)
+        # ----- Set up the run -----
+        try:
+            # Figure out what version of ArcGIS they're running
+            BBB_SharedFunctions.DetermineArcVersion()
+            if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
+                arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
+    You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
+                raise CustomError
+            
+            # Get the files from Step 1 to work with.
+            # Step1_GTFS.sql and Step1_FlatPolys must exist in order for the tool to run.
+            # Their existence is checked in the GUI validation logic.
+            FlatPolys isoline114 os.path.join(inStep1GDB, "Step1_FlatPolys")
+            SQLDbase isoline114 os.path.join(inStep1GDB, "Step1_GTFS.sql")
+            # Connect to the SQL database
+            conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
+            c isoline114 BBB_SharedFunctions.c isoline114 conn.cursor()
 
-        # Weekday or specific date to analyze.
-        # Note: Datetime format check is in tool validation code
-        day isoline114 arcpy.GetParameterAsText(2)
-        if day in BBB_SharedFunctions.days: #Generic weekday
-            Specific isoline114 False
-        else: #Specific date
-            Specific isoline114 True
-            day isoline114 datetime.datetime.strptime(day, '%Y%m%d')
-        
-        # Lower end of time window (HH:MM in 24-hour time)
-        start_time isoline114 arcpy.GetParameterAsText(3)
-        # Default start time is midnight if they leave it blank.
-        if start_time isoline114isoline114 "":
-            start_time isoline114 "00:00"
-        # Convert to seconds
-        start_sec isoline114 BBB_SharedFunctions.parse_time(start_time + ":00")
-        # Upper end of time window (HH:MM in 24-hour time)
-        end_time isoline114 arcpy.GetParameterAsText(4)
-        # Default end time is 11:59pm if they leave it blank.
-        if end_time isoline114isoline114 "":
-            end_time isoline114 "23:59"
-        # Convert to seconds
-        end_sec isoline114 BBB_SharedFunctions.parse_time(end_time + ":00")
+            # Output file designated by user
+            outDir isoline114 os.path.dirname(outFile)
+            outFilename isoline114 os.path.basename(outFile)
 
-        # Will we calculate the max wait time? This slows down the calculation, so leave it optional.
-        CalcWaitTime isoline114 arcpy.GetParameterAsText(5)
+            # Weekday or specific date to analyze.
+            # Note: Datetime format check is in tool validation code
+            if day in BBB_SharedFunctions.days: #Generic weekday
+                Specific isoline114 False
+            else: #Specific date
+                Specific isoline114 True
+                day isoline114 datetime.datetime.strptime(day, '%Y%m%d')
+            
+            # Lower end of time window (HH:MM in 24-hour time)
+            # Default start time is midnight if they leave it blank.
+            if start_time isoline114isoline114 "":
+                start_time isoline114 "00:00"
+            # Convert to seconds
+            start_sec isoline114 BBB_SharedFunctions.parse_time(start_time + ":00")
+            # Upper end of time window (HH:MM in 24-hour time)
+            # Default end time is 11:59pm if they leave it blank.
+            if end_time isoline114isoline114 "":
+                end_time isoline114 "23:59"
+            # Convert to seconds
+            end_sec isoline114 BBB_SharedFunctions.parse_time(end_time + ":00")
 
-        # Travel direction - to or from stops
-        TravelFromTo isoline114 arcpy.GetParameterAsText(6)
-        # When we query the stop_times, which one we care about depends on the
-        # user's travel direction.
-        if TravelFromTo isoline114isoline114 "Departures":
-            DepOrArr isoline114 "departure_time"
-        elif TravelFromTo isoline114isoline114 "Arrivals":
-            DepOrArr isoline114 "arrival_time"
+            # Will we calculate the max wait time? This slows down the calculation, so leave it optional.
+            CalcWaitTime isoline114 "true"
 
-        # It's okay to overwrite stuff.
-        OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
-        arcpy.env.overwriteOutput isoline114 True
+            # Travel direction - to or from stops
+            # When we query the stop_times, which one we care about depends on the
+            # user's travel direction.
+            if TravelFromTo isoline114isoline114 "Departures":
+                DepOrArr isoline114 "departure_time"
+            elif TravelFromTo isoline114isoline114 "Arrivals":
+                DepOrArr isoline114 "arrival_time"
 
-    except:
-        arcpy.AddError("Error setting up run.")
-        raise
+            # It's okay to overwrite stuff.
+            OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
+            arcpy.env.overwriteOutput isoline114 True
+
+        except:
+            arcpy.AddError("Error setting up run.")
+            raise
 
 
-    #----- Query the GTFS data to count the trips at each stop -----
-    try:
-        arcpy.AddMessage("Counting transit trips during the time window...")
+        #----- Query the GTFS data to count the trips at each stop -----
+        try:
+            arcpy.AddMessage("Counting transit trips during the time window...")
 
-        # Get a dictionary of stop times in our time window {stop_id: [[trip_id, stop_time]]}
-        stoptimedict isoline114 BBB_SharedFunctions.CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specific)
+            # Get a dictionary of stop times in our time window {stop_id: [[trip_id, stop_time]]}
+            stoptimedict isoline114 BBB_SharedFunctions.CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specific)
 
-    except:
-        arcpy.AddError("Failed to count transit trips during the time window.")
-        raise
-
-
-    #----- Find which stops serve each polygon -----
-    try:
-        arcpy.AddMessage("Retrieving list of stops associated with each polygon...")
-        # Find the stop_ids associated with each flattened polygon and put them in
-        # a dictionary. {ORIG_FID: [stop_id, stop_id,...]}
-        stackedpointdict isoline114 {}
-        GetStackedPtsStmt isoline114 "SELECT * FROM StackedPoints"
-        c.execute(GetStackedPtsStmt)
-        for PolyFID in c:
-            stackedpointdict.setdefault(PolyFID[0], []).append(str(PolyFID[1]))
-    except:
-        arcpy.AddError("Error retrieving list of stops associated with each polygon.")
-        raise
+        except:
+            arcpy.AddError("Failed to count transit trips during the time window.")
+            raise
 
 
-    # ----- Generate output data -----
-    try:
-        arcpy.AddMessage("Writing output data...")
+        #----- Find which stops serve each polygon -----
+        try:
+            arcpy.AddMessage("Retrieving list of stops associated with each polygon...")
+            # Find the stop_ids associated with each flattened polygon and put them in
+            # a dictionary. {ORIG_FID: [stop_id, stop_id,...]}
+            stackedpointdict isoline114 {}
+            GetStackedPtsStmt isoline114 "SELECT * FROM StackedPoints"
+            c.execute(GetStackedPtsStmt)
+            for PolyFID in c:
+                stackedpointdict.setdefault(PolyFID[0], []).append(str(PolyFID[1]))
+        except:
+            arcpy.AddError("Error retrieving list of stops associated with each polygon.")
+            raise
 
-        # Create the output file from FlatPolys.  We don't want to overwrite the
-        # original Step 1 template file.
-        arcpy.management.CopyFeatures(FlatPolys, outFile)
-        badpolys isoline114 []
 
-        if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
-            if ".shp" in outFilename:
-                ucursor isoline114 arcpy.UpdateCursor(outFile, "", "",
-                                        "PolyID; NumTrips; NumTripsPe; NumStopsIn; MaxWaitTim")
-                for row in ucursor:
-                    try:
-                        ImportantStops isoline114 stackedpointdict[str(row.getValue("PolyID"))]
-                    except KeyError:
-                        badpolys.append(str(row.getValue("PolyID")))
-                        continue
-                    NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                    ImportantStops, stoptimedict, CalcWaitTime,
-                                    start_sec, end_sec)
-                    row.NumTrips isoline114 NumTrips
-                    row.TripsPerHr isoline114 NumTripsPerHr
-                    row.NumStops isoline114 NumStopsInRange
-                    if MaxWaitTime isoline114isoline114 None:
-                        row.MaxWaitTm isoline114 -1
-                    else:
-                        row.MaxWaitTm isoline114 MaxWaitTime
-                    ucursor.updateRow(row)
-            else:
-                ucursor isoline114 arcpy.UpdateCursor(outFile, "", "",
-                                        "PolyID; NumTrips; NumTripsPerHr; NumStopsInRange; MaxWaitTime")
-                for row in ucursor:
-                    try:
-                        ImportantStops isoline114 stackedpointdict[str(row.getValue("PolyID"))]
-                    except KeyError:
-                        badpolys.append(str(row.getValue("PolyID")))
-                        continue
-                    NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                    ImportantStops, stoptimedict, CalcWaitTime,
-                                    start_sec, end_sec)
-                    row.NumTrips isoline114 NumTrips
-                    row.NumTripsPerHr isoline114 NumTripsPerHr
-                    row.NumStopsInRange isoline114 NumStopsInRange
-                    row.MaxWaitTime isoline114 MaxWaitTime
-                    ucursor.updateRow(row)
+        # ----- Generate output data -----
+        try:
+            arcpy.AddMessage("Writing output data...")
 
-        else:
-            if ".shp" in outFilename:
-                ucursor isoline114 arcpy.da.UpdateCursor(outFile,
-                                                ["PolyID", "NumTrips",
-                                                 "NumTripsPe", "NumStopsIn",
-                                                 "MaxWaitTim"])
-            else:
-                ucursor isoline114 arcpy.da.UpdateCursor(outFile,
-                                            ["PolyID", "NumTrips",
-                                             "NumTripsPerHr", "NumStopsInRange",
-                                             "MaxWaitTime"])
-            for row in ucursor:
-                try:
-                    ImportantStops isoline114 stackedpointdict[int(row[0])]
-                except KeyError:
-                    # If we got a KeyError here, then an output polygon never
-                    # got a point associated with it, probably the result of a
-                    # geometry problem because of the large cluster tolerance
-                    # used to generate the polygons in Step 1. Just skip this
-                    # polygon and alert the user.
-                    badpolys.append(row[0])
-                    continue
-                NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                    ImportantStops, stoptimedict, CalcWaitTime,
-                                    start_sec, end_sec)
-                row[1] isoline114 NumTrips
-                row[2] isoline114 NumTripsPerHr
-                row[3] isoline114 NumStopsInRange
-                if ".shp" in outFilename and MaxWaitTime isoline114isoline114 None:
-                    row[4] isoline114 -1
+            # Create the output file from FlatPolys.  We don't want to overwrite the
+            # original Step 1 template file.
+            arcpy.management.CopyFeatures(FlatPolys, outFile)
+            badpolys isoline114 []
+
+            if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
+                if ".shp" in outFilename:
+                    ucursor isoline114 arcpy.UpdateCursor(outFile, "", "",
+                                            "PolyID; NumTrips; NumTripsPe; NumStopsIn; MaxWaitTim")
+                    for row in ucursor:
+                        try:
+                            ImportantStops isoline114 stackedpointdict[str(row.getValue("PolyID"))]
+                        except KeyError:
+                            badpolys.append(str(row.getValue("PolyID")))
+                            continue
+                        NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
+                                    BBB_SharedFunctions.RetrieveStatsForSetOfStops(
+                                        ImportantStops, stoptimedict, CalcWaitTime,
+                                        start_sec, end_sec)
+                        row.NumTrips isoline114 NumTrips
+                        row.TripsPerHr isoline114 NumTripsPerHr
+                        row.NumStops isoline114 NumStopsInRange
+                        if MaxWaitTime isoline114isoline114 None:
+                            row.MaxWaitTm isoline114 -1
+                        else:
+                            row.MaxWaitTm isoline114 MaxWaitTime
+                        ucursor.updateRow(row)
                 else:
-                    row[4] isoline114 MaxWaitTime
-                ucursor.updateRow(row)
+                    ucursor isoline114 arcpy.UpdateCursor(outFile, "", "",
+                                            "PolyID; NumTrips; NumTripsPerHr; NumStopsInRange; MaxWaitTime")
+                    for row in ucursor:
+                        try:
+                            ImportantStops isoline114 stackedpointdict[str(row.getValue("PolyID"))]
+                        except KeyError:
+                            badpolys.append(str(row.getValue("PolyID")))
+                            continue
+                        NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
+                                    BBB_SharedFunctions.RetrieveStatsForSetOfStops(
+                                        ImportantStops, stoptimedict, CalcWaitTime,
+                                        start_sec, end_sec)
+                        row.NumTrips isoline114 NumTrips
+                        row.NumTripsPerHr isoline114 NumTripsPerHr
+                        row.NumStopsInRange isoline114 NumStopsInRange
+                        row.MaxWaitTime isoline114 MaxWaitTime
+                        ucursor.updateRow(row)
 
-        if badpolys:
-            arcpy.AddWarning("Warning! BetterBusBuffers could not calculate trip \
-statistics for one or more polygons due to a geometry issue. These polygons will \
-appear in your output data, but all output values will be null. Bad polygon \
-PolyID values: " + str(badpolys))
+            else:
+                if ".shp" in outFilename:
+                    ucursor isoline114 arcpy.da.UpdateCursor(outFile,
+                                                    ["PolyID", "NumTrips",
+                                                    "NumTripsPe", "NumStopsIn",
+                                                    "MaxWaitTim"])
+                else:
+                    ucursor isoline114 arcpy.da.UpdateCursor(outFile,
+                                                ["PolyID", "NumTrips",
+                                                "NumTripsPerHr", "NumStopsInRange",
+                                                "MaxWaitTime"])
+                for row in ucursor:
+                    try:
+                        ImportantStops isoline114 stackedpointdict[int(row[0])]
+                    except KeyError:
+                        # If we got a KeyError here, then an output polygon never
+                        # got a point associated with it, probably the result of a
+                        # geometry problem because of the large cluster tolerance
+                        # used to generate the polygons in Step 1. Just skip this
+                        # polygon and alert the user.
+                        badpolys.append(row[0])
+                        continue
+                    NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
+                                    BBB_SharedFunctions.RetrieveStatsForSetOfStops(
+                                        ImportantStops, stoptimedict, CalcWaitTime,
+                                        start_sec, end_sec)
+                    row[1] isoline114 NumTrips
+                    row[2] isoline114 NumTripsPerHr
+                    row[3] isoline114 NumStopsInRange
+                    if ".shp" in outFilename and MaxWaitTime isoline114isoline114 None:
+                        row[4] isoline114 -1
+                    else:
+                        row[4] isoline114 MaxWaitTime
+                    ucursor.updateRow(row)
+
+            if badpolys:
+                arcpy.AddWarning("Warning! BetterBusBuffers could not calculate trip \
+    statistics for one or more polygons due to a geometry issue. These polygons will \
+    appear in your output data, but all output values will be null. Bad polygon \
+    PolyID values: " + str(badpolys))
+
+        except:
+            arcpy.AddMessage("Error writing output.")
+            raise
+
+        arcpy.AddMessage("Finished!")
+        arcpy.AddMessage("Your output is located at " + outFile)
+
+    except CustomError:
+        arcpy.AddError("Error counting transit trips in polygons.")
+        pass
 
     except:
-        arcpy.AddMessage("Error writing output.")
+        arcpy.AddError("Error counting transit trips in polygons.")
         raise
 
-    arcpy.AddMessage("Finished!")
-    arcpy.AddMessage("Your output is located at " + outFile)
-
-except CustomError:
-    arcpy.AddError("Error counting transit trips in polygons.")
-    pass
-
-except:
-    arcpy.AddError("Error counting transit trips in polygons.")
-    raise
-
-finally:
-    # Reset overwriteOutput to what it was originally.
-    arcpy.env.overwriteOutput isoline114 OverwriteOutput
+    finally:
+        # Reset overwriteOutput to what it was originally.
+        arcpy.env.overwriteOutput isoline114 OverwriteOutput

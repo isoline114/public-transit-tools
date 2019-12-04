@@ -33,167 +33,160 @@ class CustomError(Exception):
     pass
 
 
-try:
-    # ------ Get input parameters and set things up. -----
+def runTool(outStops, SQLDbase, day, start_time, end_time, DepOrArrChoice):
     try:
-        
-        # Figure out what version of ArcGIS they're running
-        BBB_SharedFunctions.DetermineArcVersion()
-        if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
-            arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
-You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
-            raise CustomError
-
-        # Path for output feature class of GTFS stops.
-        # Must be a file geodatabase feature class, not a shapefile.
-        outStops isoline114 arcpy.GetParameterAsText(0)
-
-        # GTFS SQL dbase - must be created ahead of time.
-        SQLDbase isoline114 arcpy.GetParameterAsText(1)
-        BBB_SharedFunctions.ConnectToSQLDatabase(SQLDbase)
-
-        # Weekday or specific date to analyze.
-        # Note: Datetime format check is in tool validation code
-        day isoline114 arcpy.GetParameterAsText(2)
-        if day in BBB_SharedFunctions.days: #Generic weekday
-            Specific isoline114 False
-        else: #Specific date
-            Specific isoline114 True
-            day isoline114 datetime.datetime.strptime(day, '%Y%m%d')
+        # ------ Get input parameters and set things up. -----
+        try:
             
-        # Lower end of time window (HH:MM in 24-hour time)
-        start_time isoline114 arcpy.GetParameterAsText(3)
-        # Default start time is midnight if they leave it blank.
-        if start_time isoline114isoline114 "":
-            start_time isoline114 "00:00"
-        # Convert to seconds
-        start_sec isoline114 BBB_SharedFunctions.parse_time(start_time + ":00")
-        # Upper end of time window (HH:MM in 24-hour time)
-        end_time isoline114 arcpy.GetParameterAsText(4)
-        # Default end time is 11:59pm if they leave it blank.
-        if end_time isoline114isoline114 "":
-            end_time isoline114 "23:59"
-        # Convert to seconds
-        end_sec isoline114 BBB_SharedFunctions.parse_time(end_time + ":00")
+            # Figure out what version of ArcGIS they're running
+            BBB_SharedFunctions.DetermineArcVersion()
+            if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
+                arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
+    You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
+                raise CustomError
 
-        # Will we calculate the max wait time? This slows down the calculation, so leave it optional.
-        CalcWaitTime isoline114 arcpy.GetParameterAsText(5)
+            # GTFS SQL dbase - must be created ahead of time.
+            BBB_SharedFunctions.ConnectToSQLDatabase(SQLDbase)
 
-        # Does the user want to count arrivals or departures at the stops?
-        DepOrArrChoice isoline114 arcpy.GetParameterAsText(6)
-        if DepOrArrChoice isoline114isoline114 "Arrivals":
-            DepOrArr isoline114 "arrival_time"
-        elif DepOrArrChoice isoline114isoline114 "Departures":
-            DepOrArr isoline114 "departure_time"
+            # Weekday or specific date to analyze.
+            # Note: Datetime format check is in tool validation code
+            if day in BBB_SharedFunctions.days: #Generic weekday
+                Specific isoline114 False
+            else: #Specific date
+                Specific isoline114 True
+                day isoline114 datetime.datetime.strptime(day, '%Y%m%d')
+                
+            # Lower end of time window (HH:MM in 24-hour time)
+            start_time isoline114 arcpy.GetParameterAsText(3)
+            # Default start time is midnight if they leave it blank.
+            if start_time isoline114isoline114 "":
+                start_time isoline114 "00:00"
+            # Convert to seconds
+            start_sec isoline114 BBB_SharedFunctions.parse_time(start_time + ":00")
+            # Upper end of time window (HH:MM in 24-hour time)
+            # Default end time is 11:59pm if they leave it blank.
+            if end_time isoline114isoline114 "":
+                end_time isoline114 "23:59"
+            # Convert to seconds
+            end_sec isoline114 BBB_SharedFunctions.parse_time(end_time + ":00")
 
-    except:
-        arcpy.AddError("Error getting user inputs.")
-        raise
+            # Will we calculate the max wait time?
+            CalcWaitTime isoline114 "true"
 
+            # Does the user want to count arrivals or departures at the stops?
+            if DepOrArrChoice isoline114isoline114 "Arrivals":
+                DepOrArr isoline114 "arrival_time"
+            elif DepOrArrChoice isoline114isoline114 "Departures":
+                DepOrArr isoline114 "departure_time"
 
-    # ----- Create a feature class of stops and add fields for transit trip counts ------
-    try:
-        arcpy.AddMessage("Creating feature class of GTFS stops...")
-
-        # Create a feature class of transit stops
-        outStops, StopIDList isoline114 BBB_SharedFunctions.MakeStopsFeatureClass(outStops)
-
-        # Add a field to the output file for number of trips, num trips / hour, and max wait time
-        if ".shp" in outStops:
-            # Shapefiles can't have long field names
-            arcpy.management.AddField(outStops, "NumTrips", "SHORT")
-            arcpy.management.AddField(outStops, "TripsPerHr", "DOUBLE")
-            arcpy.management.AddField(outStops, "MaxWaitTm", "SHORT")
-        else:
-            arcpy.management.AddField(outStops, "NumTrips", "SHORT")
-            arcpy.management.AddField(outStops, "NumTripsPerHr", "DOUBLE")
-            arcpy.management.AddField(outStops, "MaxWaitTime", "SHORT")
-
-    except:
-        arcpy.AddError("Error creating feature class of GTFS stops.")
-        raise
+        except:
+            arcpy.AddError("Error getting user inputs.")
+            raise
 
 
-    #----- Query the GTFS data to count the trips at each stop -----
-    try:
-        arcpy.AddMessage("Calculating the number of transit trips available during the time window...")
+        # ----- Create a feature class of stops and add fields for transit trip counts ------
+        try:
+            arcpy.AddMessage("Creating feature class of GTFS stops...")
 
-        # Get a dictionary of {stop_id: [[trip_id, stop_time]]} for our time window
-        stoptimedict isoline114 BBB_SharedFunctions.CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specific)
+            # Create a feature class of transit stops
+            outStops, StopIDList isoline114 BBB_SharedFunctions.MakeStopsFeatureClass(outStops)
 
-    except:
-        arcpy.AddError("Error counting arrivals or departures at stop during time window.")
-        raise
-
-
-    # ----- Write to output -----
-    try:
-        arcpy.AddMessage("Writing output data...")
-
-        # Create an update cursor to add numtrips, trips/hr, and maxwaittime to stops
-        if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
+            # Add a field to the output file for number of trips, num trips / hour, and max wait time
             if ".shp" in outStops:
-                ucursor isoline114 arcpy.UpdateCursor(outStops, "", "", "stop_id; NumTrips; TripsPerHr; MaxWaitTm")
-                for row in ucursor:
-                    NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                            BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                [str(row.getValue("stop_id"))], stoptimedict,
-                                CalcWaitTime, start_sec, end_sec)
-                    row.NumTrips isoline114 NumTrips
-                    row.TripsPerHr isoline114 NumTripsPerHr
-                    if MaxWaitTime isoline114isoline114 None:
-                        row.MaxWaitTm isoline114 -1
-                    else:
-                        row.MaxWaitTm isoline114 MaxWaitTime
-                    ucursor.updateRow(row)
+                # Shapefiles can't have long field names
+                arcpy.management.AddField(outStops, "NumTrips", "SHORT")
+                arcpy.management.AddField(outStops, "TripsPerHr", "DOUBLE")
+                arcpy.management.AddField(outStops, "MaxWaitTm", "SHORT")
             else:
-                ucursor isoline114 arcpy.UpdateCursor(outStops, "", "", "stop_id; NumTrips; NumTripsPerHr; MaxWaitTime")
-                for row in ucursor:
-                    NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                            BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                [str(row.getValue("stop_id"))], stoptimedict,
-                                CalcWaitTime, start_sec, end_sec)
-                    row.NumTrips isoline114 NumTrips
-                    row.NumTripsPerHr isoline114 NumTripsPerHr
-                    row.MaxWaitTime isoline114 MaxWaitTime
-                    ucursor.updateRow(row)
+                arcpy.management.AddField(outStops, "NumTrips", "SHORT")
+                arcpy.management.AddField(outStops, "NumTripsPerHr", "DOUBLE")
+                arcpy.management.AddField(outStops, "MaxWaitTime", "SHORT")
 
-        else:
-            # For everything 10.1 and forward
-            if ".shp" in outStops:
-                ucursor isoline114 arcpy.da.UpdateCursor(outStops,
-                                            ["stop_id", "NumTrips",
-                                             "TripsPerHr",
-                                             "MaxWaitTm"])
-            else:
-                ucursor isoline114 arcpy.da.UpdateCursor(outStops,
-                                            ["stop_id", "NumTrips",
-                                             "NumTripsPerHr",
-                                             "MaxWaitTime"])
-            for row in ucursor:
-                NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                            BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                [str(row[0])], stoptimedict, CalcWaitTime,
-                                start_sec, end_sec)
-                row[1] isoline114 NumTrips
-                row[2] isoline114 NumTripsPerHr
-                if ".shp" in outStops and MaxWaitTime isoline114isoline114 None:
-                    row[3] isoline114 -1
+        except:
+            arcpy.AddError("Error creating feature class of GTFS stops.")
+            raise
+
+
+        #----- Query the GTFS data to count the trips at each stop -----
+        try:
+            arcpy.AddMessage("Calculating the number of transit trips available during the time window...")
+
+            # Get a dictionary of {stop_id: [[trip_id, stop_time]]} for our time window
+            stoptimedict isoline114 BBB_SharedFunctions.CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specific)
+
+        except:
+            arcpy.AddError("Error counting arrivals or departures at stop during time window.")
+            raise
+
+
+        # ----- Write to output -----
+        try:
+            arcpy.AddMessage("Writing output data...")
+
+            # Create an update cursor to add numtrips, trips/hr, and maxwaittime to stops
+            if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
+                if ".shp" in outStops:
+                    ucursor isoline114 arcpy.UpdateCursor(outStops, "", "", "stop_id; NumTrips; TripsPerHr; MaxWaitTm")
+                    for row in ucursor:
+                        NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
+                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
+                                    [str(row.getValue("stop_id"))], stoptimedict,
+                                    CalcWaitTime, start_sec, end_sec)
+                        row.NumTrips isoline114 NumTrips
+                        row.TripsPerHr isoline114 NumTripsPerHr
+                        if MaxWaitTime isoline114isoline114 None:
+                            row.MaxWaitTm isoline114 -1
+                        else:
+                            row.MaxWaitTm isoline114 MaxWaitTime
+                        ucursor.updateRow(row)
                 else:
-                    row[3] isoline114 MaxWaitTime
-                ucursor.updateRow(row)
+                    ucursor isoline114 arcpy.UpdateCursor(outStops, "", "", "stop_id; NumTrips; NumTripsPerHr; MaxWaitTime")
+                    for row in ucursor:
+                        NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
+                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
+                                    [str(row.getValue("stop_id"))], stoptimedict,
+                                    CalcWaitTime, start_sec, end_sec)
+                        row.NumTrips isoline114 NumTrips
+                        row.NumTripsPerHr isoline114 NumTripsPerHr
+                        row.MaxWaitTime isoline114 MaxWaitTime
+                        ucursor.updateRow(row)
+
+            else:
+                # For everything 10.1 and forward
+                if ".shp" in outStops:
+                    ucursor isoline114 arcpy.da.UpdateCursor(outStops,
+                                                ["stop_id", "NumTrips",
+                                                "TripsPerHr",
+                                                "MaxWaitTm"])
+                else:
+                    ucursor isoline114 arcpy.da.UpdateCursor(outStops,
+                                                ["stop_id", "NumTrips",
+                                                "NumTripsPerHr",
+                                                "MaxWaitTime"])
+                for row in ucursor:
+                    NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
+                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
+                                    [str(row[0])], stoptimedict, CalcWaitTime,
+                                    start_sec, end_sec)
+                    row[1] isoline114 NumTrips
+                    row[2] isoline114 NumTripsPerHr
+                    if ".shp" in outStops and MaxWaitTime isoline114isoline114 None:
+                        row[3] isoline114 -1
+                    else:
+                        row[3] isoline114 MaxWaitTime
+                    ucursor.updateRow(row)
+
+        except:
+            arcpy.AddError("Error writing to output.")
+            raise
+
+        arcpy.AddMessage("Finished!")
+        arcpy.AddMessage("Your output is located at " + outStops)
+
+    except CustomError:
+        arcpy.AddError("Failed to count trips at stops.")
+        pass
 
     except:
-        arcpy.AddError("Error writing to output.")
+        arcpy.AddError("Failed to count trips at stops.")
         raise
-
-    arcpy.AddMessage("Finished!")
-    arcpy.AddMessage("Your output is located at " + outStops)
-
-except CustomError:
-    arcpy.AddError("Failed to count trips at stops.")
-    pass
-
-except:
-    arcpy.AddError("Failed to count trips at stops.")
-    raise
