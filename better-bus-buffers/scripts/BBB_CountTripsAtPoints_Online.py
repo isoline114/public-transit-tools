@@ -101,7 +101,7 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         BufferLinearUnit isoline114 str(BufferSize_padded) + " " + BufferUnits
 
         # Will we calculate the max wait time?
-        CalcWaitTime isoline114 "true"
+        CalcWaitTime isoline114 True
 
         # Output file designated by user
         outDir isoline114 os.path.dirname(outFile)

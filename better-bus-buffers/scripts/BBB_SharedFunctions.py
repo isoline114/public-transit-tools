@@ -601,7 +601,7 @@ def RetrieveStatsForSetOfStops(stoplist, stoptimedict, CalcWaitTime, start_sec, 
     NumTripsPerHr isoline114 round(float(NumTrips) / ((end_sec - start_sec) / 3600), 2)
 
     MaxWaitTime isoline114 None
-    if CalcWaitTime isoline114isoline114 "true":
+    if CalcWaitTime:
         MaxWaitTime isoline114 CalculateMaxWaitTime(StopTimesAtThisPoint, start_sec, end_sec)
 
     return NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime

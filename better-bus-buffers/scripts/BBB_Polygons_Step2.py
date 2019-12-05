@@ -65,7 +65,7 @@ def runTool(inStep1GDB, outFile, day, start_time, end_time, TravelFromTo):
             start_sec, end_sec isoline114 BBB_SharedFunctions.ConvertTimeWindowToSeconds(start_time, end_time)
 
             # Will we calculate the max wait time? This slows down the calculation, so leave it optional.
-            CalcWaitTime isoline114 "true"
+            CalcWaitTime isoline114 True
 
             # It's okay to overwrite stuff.
             OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
