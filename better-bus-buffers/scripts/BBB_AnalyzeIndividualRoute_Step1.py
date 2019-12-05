@@ -36,9 +36,6 @@ import os, sqlite3
 import arcpy
 import BBB_SharedFunctions
 
-class CustomError(Exception):
-    pass
-
 OverwriteOutput isoline114 None
 conn isoline114 None
 
@@ -47,17 +44,8 @@ def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, rest
     try:
         # ------ Get input parameters and set things up. -----
         try:
-            version_error isoline114 BBB_SharedFunctions.CheckProVersion("1.2")
-            if version_error:
-                arcpy.AddError(version_error)
-                raise CustomError
-            
-            #Check out the Network Analyst extension license
-            if arcpy.CheckExtension("Network") isoline114isoline114 "Available":
-                arcpy.CheckOutExtension("Network")
-            else:
-                arcpy.AddError("You must have a Network Analyst license to use this tool.")
-                raise CustomError
+            BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
+            BBB_SharedFunctions.CheckOutNALicense()
             
             OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
             arcpy.env.overwriteOutput isoline114 True
@@ -68,12 +56,12 @@ def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, rest
             if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro":
                 if not arcpy.env.workspace:
                     arcpy.AddError(BBB_SharedFunctions.CurrentGPWorkspaceError)
-                    raise CustomError
+                    raise BBB_SharedFunctions.CustomError
                 else:
                     workspacedesc isoline114 arcpy.Describe(arcpy.env.workspace)
                     if not workspacedesc.workspaceFactoryProgID.startswith('esriDataSourcesGDB.FileGDBWorkspaceFactory'):
                         arcpy.AddError(BBB_SharedFunctions.CurrentGPWorkspaceError)
-                        raise CustomError
+                        raise BBB_SharedFunctions.CustomError
 
         except:
             arcpy.AddError("Error getting user inputs.")
@@ -108,7 +96,7 @@ def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, rest
 
             if not route_id:
                 arcpy.AddError("Could not parse route selection.")
-                raise CustomError
+                raise BBB_SharedFunctions.CustomError
 
             # Name feature classes
             outStopsname isoline114 arcpy.ValidateTableName("Stops_" + route_short_name, outGDB)
@@ -141,7 +129,7 @@ def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, rest
                 arcpy.AddError("There are no trips in the GTFS data for the route \
     you have selected (%s).  Please select a different route or fix your GTFS \
     dataset." % RouteText)
-                raise CustomError
+                raise BBB_SharedFunctions.CustomError
 
         except:
             arcpy.AddError("Error getting trips associated with route.")
@@ -279,7 +267,7 @@ def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, rest
         outFClistwpaths isoline114 [os.path.join(outGDB, fc) for fc in outFClist]
         arcpy.SetParameterAsText(8, ';'.join(outFClistwpaths))
 
-    except CustomError:
+    except BBB_SharedFunctions.CustomError:
         arcpy.AddError("Failed to create buffers around stops for this route.")
         pass
 

@@ -31,19 +31,13 @@ import os
 import arcpy
 import BBB_SharedFunctions
 
-class CustomError(Exception):
-    pass
-
 
 def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, end_time,
             inNetworkDataset, imp, BufferSize, restrictions, DepOrArrChoice):
     try:
-        version_error isoline114 BBB_SharedFunctions.CheckProVersion("1.2")
-        if version_error:
-            arcpy.AddError(version_error)
-            raise CustomError
-        ArcVersion isoline114 BBB_SharedFunctions.ArcVersion
+        BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
         ProductName isoline114 BBB_SharedFunctions.ProductName
+        BBB_SharedFunctions.CheckOutNALicense()
 
         #----- Get input parameters -----
         BBB_SharedFunctions.ConnectToSQLDatabase(SQLDbase)
@@ -91,27 +85,18 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         outDir isoline114 os.path.dirname(outFile)
         outFilename isoline114 os.path.basename(outFile)
 
-        #Check out the Network Analyst extension license
-        # (note that this does NOT check out the extension in ArcMap.
-        # It has to be done manually there.)
-        if arcpy.CheckExtension("Network") isoline114isoline114 "Available":
-            arcpy.CheckOutExtension("Network")
-        else:
-            arcpy.AddError("You must have a Network Analyst license to use this tool.")
-            raise CustomError
-
         # If running in Pro, make sure an fgdb workspace is set so NA layers can be created.
         if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro":
             if not arcpy.env.workspace:
                 arcpy.AddError(BBB_SharedFunctions.CurrentGPWorkspaceError)
                 print(BBB_SharedFunctions.CurrentGPWorkspaceError)
-                raise CustomError
+                raise BBB_SharedFunctions.CustomError
             else:
                 workspacedesc isoline114 arcpy.Describe(arcpy.env.workspace)
                 if not workspacedesc.workspaceFactoryProgID.startswith('esriDataSourcesGDB.FileGDBWorkspaceFactory'):
                     arcpy.AddError(BBB_SharedFunctions.CurrentGPWorkspaceError)
                     print(BBB_SharedFunctions.CurrentGPWorkspaceError)
-                    raise CustomError
+                    raise BBB_SharedFunctions.CustomError
 
         # Extract impedance attribute and units from text string
         # The input is formatted as "[Impedance] (Units: [Units])"
@@ -170,10 +155,7 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
                                             hierarchy, "", PathShape).getOutput(0)
 
             # To refer to the OD sublayers, get the sublayer names.  This is essential for localization.
-            if ArcVersion isoline114isoline114 "10.0":
-                naSubLayerNames isoline114 dict((sublayer.datasetName, sublayer.name) for sublayer in  arcpy.mapping.ListLayers(ODLayer)[1:])
-            else:
-                naSubLayerNames isoline114 arcpy.na.GetNAClassNames(ODLayer)
+            naSubLayerNames isoline114 arcpy.na.GetNAClassNames(ODLayer)
             points isoline114 naSubLayerNames["Origins"]
             stops isoline114 naSubLayerNames["Destinations"]
 
@@ -181,12 +163,9 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
             arcpy.na.AddFieldToAnalysisLayer(outNALayer_OD, stops,
                                             "stop_id", "TEXT")
             # Specify the field mappings for the stop_id field.
-            if ArcVersion isoline114isoline114 "10.0":
-                fieldMappingStops isoline114 "Name stop_id #; stop_id stop_id #"
-            else:
-                fieldMappingStops isoline114 arcpy.na.NAClassFieldMappings(ODLayer, stops)
-                fieldMappingStops["Name"].mappedFieldName isoline114 "stop_id"
-                fieldMappingStops["stop_id"].mappedFieldName isoline114 "stop_id"
+            fieldMappingStops isoline114 arcpy.na.NAClassFieldMappings(ODLayer, stops)
+            fieldMappingStops["Name"].mappedFieldName isoline114 "stop_id"
+            fieldMappingStops["stop_id"].mappedFieldName isoline114 "stop_id"
             # Add the GTFS stops as locations for the analysis.
             arcpy.na.AddLocations(outNALayer_OD, stops, StopsLayer,
                                     fieldMappingStops, "500 meters", "", "", "", "", "", "",
@@ -198,12 +177,9 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
             arcpy.na.AddFieldToAnalysisLayer(outNALayer_OD, points,
                                             inLocUniqueID_qualified, "TEXT")
             # Specify the field mappings for the unique id field.
-            if ArcVersion isoline114isoline114 "10.0":
-                fieldMappingPoints isoline114 "Name " + inLocUniqueID + " #; " + inLocUniqueID_qualified + " " + inLocUniqueID + " #"
-            else:
-                fieldMappingPoints isoline114 arcpy.na.NAClassFieldMappings(ODLayer, points)
-                fieldMappingPoints["Name"].mappedFieldName isoline114 inLocUniqueID
-                fieldMappingPoints[inLocUniqueID_qualified].mappedFieldName isoline114 inLocUniqueID
+            fieldMappingPoints isoline114 arcpy.na.NAClassFieldMappings(ODLayer, points)
+            fieldMappingPoints["Name"].mappedFieldName isoline114 inLocUniqueID
+            fieldMappingPoints[inLocUniqueID_qualified].mappedFieldName isoline114 inLocUniqueID
             # Add the input points as locations for the analysis.
             arcpy.na.AddLocations(outNALayer_OD, points, inPointsLayer,
                                     fieldMappingPoints, "500 meters", "", "", "", "", "", "",
@@ -241,17 +217,9 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
             global PointsAndStops
             # PointsAndStops isoline114 {LocID: [stop_1, stop_2, ...]}
             PointsAndStops isoline114 {}
-            if ArcVersion isoline114isoline114 "10.0":
-                ODCursor isoline114 arcpy.SearchCursor(linesSubLayer, "", "",
-                                                inLocUniqueID_qualified + "; stop_id")
-                for row in ODCursor:
-                    UID isoline114 row.getValue(inLocUniqueID_qualified)
-                    SID isoline114 row.getValue("stop_id")
-                    PointsAndStops.setdefault(str(UID), []).append(str(SID))
-            else:
-                ODCursor isoline114 arcpy.da.SearchCursor(linesSubLayer, [inLocUniqueID_qualified, "stop_id"])
-                for row in ODCursor:
-                    PointsAndStops.setdefault(str(row[0]), []).append(str(row[1]))
+            ODCursor isoline114 arcpy.da.SearchCursor(linesSubLayer, [inLocUniqueID_qualified, "stop_id"])
+            for row in ODCursor:
+                PointsAndStops.setdefault(str(row[0]), []).append(str(row[1]))
             del ODCursor
 
         except:
@@ -288,77 +256,34 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
                 arcpy.management.AddField(outFile, "NumStopsInRange", "SHORT")
                 arcpy.management.AddField(outFile, "MaxWaitTime", "SHORT")
 
-            if ArcVersion isoline114isoline114 "10.0":
-                if ".shp" in outFilename:
-                    ucursor isoline114 arcpy.UpdateCursor(outFile, "", "",
-                                            inLocUniqueID[0:10] + "; NumTrips; TripsPerHr; NumStops; MaxWaitTm")
-                    for row in ucursor:
-                        try:
-                            ImportantStops isoline114 PointsAndStops[str(row.getValue(inLocUniqueID))]
-                        except KeyError:
-                            # This point had no stops in range
-                            ImportantStops isoline114 []
-                        NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                                    BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                        ImportantStops, stoptimedict, CalcWaitTime,
-                                        start_sec, end_sec)
-                        row.NumTrips isoline114 NumTrips
-                        row.TripsPerHr isoline114 NumTripsPerHr
-                        row.NumStops isoline114 NumStopsInRange
-                        if MaxWaitTime isoline114isoline114 None:
-                            row.MaxWaitTm isoline114 -1
-                        else:
-                            row.MaxWaitTm isoline114 MaxWaitTime
-                        ucursor.updateRow(row)
-                else:
-                    ucursor isoline114 arcpy.UpdateCursor(outFile, "", "",
-                                            inLocUniqueID + "; NumTrips; NumTripsPerHr; NumStopsInRange; MaxWaitTime")
-                    for row in ucursor:
-                        try:
-                            ImportantStops isoline114 PointsAndStops[str(row.getValue(inLocUniqueID))]
-                        except KeyError:
-                            # This point had no stops in range
-                            ImportantStops isoline114 []
-                        NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                                    BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                        ImportantStops, stoptimedict, CalcWaitTime,
-                                        start_sec, end_sec)
-                        row.NumTrips isoline114 NumTrips
-                        row.NumTripsPerHr isoline114 NumTripsPerHr
-                        row.NumStopsInRange isoline114 NumStopsInRange
-                        row.MaxWaitTime isoline114 MaxWaitTime
-                        ucursor.updateRow(row)
-
+            if ".shp" in outFilename:
+                ucursor isoline114 arcpy.da.UpdateCursor(outFile,
+                                                [inLocUniqueID[0:10], "NumTrips",
+                                                "TripsPerHr", "NumStops",
+                                                "MaxWaitTm"])
             else:
-                # For everything 10.1 and forward
-                if ".shp" in outFilename:
-                    ucursor isoline114 arcpy.da.UpdateCursor(outFile,
-                                                    [inLocUniqueID[0:10], "NumTrips",
-                                                    "TripsPerHr", "NumStops",
-                                                    "MaxWaitTm"])
+                ucursor isoline114 arcpy.da.UpdateCursor(outFile,
+                                            [inLocUniqueID, "NumTrips",
+                                            "NumTripsPerHr", "NumStopsInRange",
+                                            "MaxWaitTime"])
+            for row in ucursor:
+                try:
+                    ImportantStops isoline114 PointsAndStops[str(row[0])]
+                except KeyError:
+                    # This point had no stops in range
+                    ImportantStops isoline114 []
+                NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114\
+                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
+                                    ImportantStops, stoptimedict, CalcWaitTime,
+                                    start_sec, end_sec)
+                row[1] isoline114 NumTrips
+                row[2] isoline114 NumTripsPerHr
+                row[3] isoline114 NumStopsInRange
+                if ".shp" in outFilename and MaxWaitTime isoline114isoline114 None:
+                    row[4] isoline114 -1
                 else:
-                    ucursor isoline114 arcpy.da.UpdateCursor(outFile,
-                                                [inLocUniqueID, "NumTrips",
-                                                "NumTripsPerHr", "NumStopsInRange",
-                                                "MaxWaitTime"])
-                for row in ucursor:
-                    try:
-                        ImportantStops isoline114 PointsAndStops[str(row[0])]
-                    except KeyError:
-                        # This point had no stops in range
-                        ImportantStops isoline114 []
-                    NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114\
-                                    BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                        ImportantStops, stoptimedict, CalcWaitTime,
-                                        start_sec, end_sec)
-                    row[1] isoline114 NumTrips
-                    row[2] isoline114 NumTripsPerHr
-                    row[3] isoline114 NumStopsInRange
-                    if ".shp" in outFilename and MaxWaitTime isoline114isoline114 None:
-                        row[4] isoline114 -1
-                    else:
-                        row[4] isoline114 MaxWaitTime
-                    ucursor.updateRow(row)
+                    row[4] isoline114 MaxWaitTime
+                ucursor.updateRow(row)
 
         except:
             arcpy.AddError("Error writing output.")
@@ -368,7 +293,7 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         arcpy.AddMessage("Output files written:")
         arcpy.AddMessage("- " + outFile)
 
-    except CustomError:
+    except BBB_SharedFunctions.CustomError:
         arcpy.AddError("Error counting transit trips at input locations.")
         pass
 

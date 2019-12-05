@@ -34,9 +34,6 @@ import os, time, math, json, math
 import arcpy
 import BBB_SharedFunctions
 
-class CustomError(Exception):
-    pass
-
 
 def runOD(Points, Stops):
     # Call the OD Cost Matrix service for this set of chunks
@@ -58,7 +55,7 @@ def runOD(Points, Stops):
         else:
             arcpy.AddError("An error occured when running the tool")
             arcpy.AddError(result.getMessages(2))
-            raise CustomError
+            raise BBB_SharedFunctions.CustomError
     elif result_severity isoline114isoline114 1:
         arcpy.AddWarning("Warnings were returned when running the tool")
         arcpy.AddWarning(result.getMessages(1))
@@ -89,19 +86,7 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
         arcpy.env.overwriteOutput isoline114 True
         
-        # Figure out what version of ArcGIS they're running
-        BBB_SharedFunctions.DetermineArcVersion()
-        ArcVersion isoline114 BBB_SharedFunctions.ArcVersion
-        ProductName isoline114 BBB_SharedFunctions.ProductName
-        if ArcVersion isoline114isoline114 "10.0":
-            arcpy.AddError("You must have ArcGIS 10.1 or higher (or ArcGIS Pro) to run this \
-    tool. You have ArcGIS version %s." % ArcVersion)
-            raise CustomError
-        version_error isoline114 BBB_SharedFunctions.CheckProVersion("1.2")
-        if version_error:
-            arcpy.AddError(version_error)
-            raise CustomError
-
+        BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
 
         #----- Get input parameters -----
 
@@ -182,7 +167,7 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
                 credentials isoline114 arcpy.GetSigninToken()
                 if not credentials:
                     arcpy.AddError("Please sign into ArcGIS Online or pass a username and password to the tool.")
-                    raise CustomError
+                    raise BBB_SharedFunctions.CustomError
                 token isoline114 credentials["token"]
                 referer isoline114 credentials["referer"]
                 ODservice isoline114 BBB_SharedFunctions.import_AGOLservice(OD_service_name, tokenisoline114token, refererisoline114referer)
@@ -435,7 +420,7 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         arcpy.AddMessage("Output files written:")
         arcpy.AddMessage("- " + outFile)
 
-    except CustomError:
+    except BBB_SharedFunctions.CustomError:
         arcpy.AddError("Error counting transit trips at input locations.")
         pass
 
