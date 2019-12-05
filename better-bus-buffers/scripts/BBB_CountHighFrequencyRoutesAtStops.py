@@ -112,19 +112,7 @@ def runTool(outStops, SQLDbase, day, start_time, end_time, DepOrArrChoice, Frequ
             c isoline114 BBB_SharedFunctions.c isoline114 conn.cursor()
 
             Specific, day isoline114 BBB_SharedFunctions.CheckSpecificDate(day)
-
-            # Lower end of time window (HH:MM in 24-hour time)
-            # Default start time is midnight if they leave it blank.
-            if start_time isoline114isoline114 "":
-                start_time isoline114 "00:00"
-            # Convert to seconds
-            start_sec isoline114 BBB_SharedFunctions.parse_time(start_time + ":00")
-            # Upper end of time window (HH:MM in 24-hour time)
-            # Default end time is 11:59pm if they leave it blank.
-            if end_time isoline114isoline114 "":
-                end_time isoline114 "23:59"
-            # Convert to seconds
-            end_sec isoline114 BBB_SharedFunctions.parse_time(end_time + ":00")
+            start_sec, end_sec isoline114 BBB_SharedFunctions.ConvertTimeWindowToSeconds(start_time, end_time)
             # Window of Time In Hours
             TimeWindowLength isoline114 (end_sec - start_sec) / 3600
 
@@ -133,10 +121,7 @@ def runTool(outStops, SQLDbase, day, start_time, end_time, DepOrArrChoice, Frequ
             # boolean will snap headways to nearest 5 minute increment (ie 11.5 minutes snaps to 10, but 13 snaps to 15)
             SnapToNearest5MinuteBool isoline114 bool(SnapToNearest5MinuteBool)
             # Does the user want to count arrivals or departures at the stops?
-            if DepOrArrChoice isoline114isoline114 "Arrivals":
-                DepOrArr isoline114 "arrival_time"
-            elif DepOrArrChoice isoline114isoline114 "Departures":
-                DepOrArr isoline114 "departure_time"
+            DepOrArr isoline114 BBB_SharedFunctions.CleanUpDepOrArr(DepOrArrChoice)
             time_period isoline114 start_time + ":" + end_time
 
         except:

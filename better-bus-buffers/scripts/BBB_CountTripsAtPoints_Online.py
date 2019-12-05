@@ -94,19 +94,7 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         BBB_SharedFunctions.ConnectToSQLDatabase(SQLDbase)
 
         Specific, day isoline114 BBB_SharedFunctions.CheckSpecificDate(day)
-
-        # Lower end of time window (HH:MM in 24-hour time)
-        # Default start time is midnight if they leave it blank.
-        if start_time isoline114isoline114 "":
-            start_time isoline114 "00:00"
-        # Convert to seconds
-        start_sec isoline114 BBB_SharedFunctions.parse_time(start_time + ":00")
-        # Upper end of time window (HH:MM in 24-hour time)
-        # Default end time is 11:59pm if they leave it blank.
-        if end_time isoline114isoline114 "":
-            end_time isoline114 "23:59"
-        # Convert to seconds
-        end_sec isoline114 BBB_SharedFunctions.parse_time(end_time + ":00")
+        start_sec, end_sec isoline114 BBB_SharedFunctions.ConvertTimeWindowToSeconds(start_time, end_time)
 
         # Distance between stops and points
         BufferSize_padded isoline114 BufferSize + (.2 * BufferSize)
@@ -114,11 +102,6 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
 
         # Will we calculate the max wait time?
         CalcWaitTime isoline114 "true"
-
-        if DepOrArrChoice isoline114isoline114 "Arrivals":
-            DepOrArr isoline114 "arrival_time"
-        elif DepOrArrChoice isoline114isoline114 "Departures":
-            DepOrArr isoline114 "departure_time"
 
         # Output file designated by user
         outDir isoline114 os.path.dirname(outFile)
@@ -309,7 +292,7 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
             arcpy.AddMessage("Calculating the number of transit trips available during the time window...")
 
             # Get a dictionary of stop times in our time window {stop_id: [[trip_id, stop_time]]}
-            stoptimedict isoline114 BBB_SharedFunctions.CountTripsAtStops(day, start_sec, end_sec, DepOrArr, Specific)
+            stoptimedict isoline114 BBB_SharedFunctions.CountTripsAtStops(day, start_sec, end_sec, BBB_SharedFunctions.CleanUpDepOrArr(DepOrArrChoice), Specific)
 
         except:
             arcpy.AddError("Error calculating the number of transit trips available during the time window.")
