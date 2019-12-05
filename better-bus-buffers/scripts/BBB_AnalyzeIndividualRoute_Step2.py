@@ -101,16 +101,12 @@ def runTool(FCs, SQLDbase, dayString, start_time, end_time, DepOrArrChoice):
             conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
             c isoline114 BBB_SharedFunctions.c isoline114 conn.cursor()
 
-            # Weekday or specific date to analyze.
-            # Note: Datetime format check is in tool validation code
-            if dayString in BBB_SharedFunctions.days: #Generic weekday
-                Specific isoline114 False
-                day isoline114 dayString
-                dayshort isoline114 dayString[0:3] # For field names in the output file
-            else: #Specific date
-                Specific isoline114 True
-                day isoline114 datetime.datetime.strptime(dayString, '%Y%m%d')
-                dayshort isoline114 BBB_SharedFunctions.days[day.weekday()][0:3] # For field names in the output file
+            Specific, day isoline114 BBB_SharedFunctions.CheckSpecificDate(day)
+            # For field names in the output file
+            if Specific:
+                dayshort isoline114 BBB_SharedFunctions.days[day.weekday()][0:3] 
+            else:
+                dayshort isoline114 dayString[0:3]
             
             # Lower end of time window (HH:MM in 24-hour time)
             # Default start time is midnight if they leave it blank.

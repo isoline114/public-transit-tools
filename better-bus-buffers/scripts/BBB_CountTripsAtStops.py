@@ -40,13 +40,7 @@ def runTool(outStops, SQLDbase, day, start_time, end_time, DepOrArrChoice):
             # GTFS SQL dbase - must be created ahead of time.
             BBB_SharedFunctions.ConnectToSQLDatabase(SQLDbase)
 
-            # Weekday or specific date to analyze.
-            # Note: Datetime format check is in tool validation code
-            if day in BBB_SharedFunctions.days: #Generic weekday
-                Specific isoline114 False
-            else: #Specific date
-                Specific isoline114 True
-                day isoline114 datetime.datetime.strptime(day, '%Y%m%d')
+            Specific, day isoline114 BBB_SharedFunctions.CheckSpecificDate(day)
                 
             # Lower end of time window (HH:MM in 24-hour time)
             start_time isoline114 arcpy.GetParameterAsText(3)
