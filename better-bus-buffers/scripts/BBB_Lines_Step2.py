@@ -33,29 +33,24 @@ import BBB_SharedFunctions
 def runTool(step1LinesFC, SQLDbase, linesFC, day, start_time, end_time):
     try:
         # ------ Get input parameters and set things up. -----
+
+        BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
+
         try:
-
-            BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
-
-            try:
-                # If it was a feature layer, it will have a data source property
-                step1LinesFC isoline114 step1LinesFC.dataSource
-            except:
-                # Otherwise, assume it was a catalog path and use as is
-                pass
-
-            # GTFS SQL dbase - must be created ahead of time.
-            BBB_SharedFunctions.ConnectToSQLDatabase(SQLDbase)
-
-            Specific, day isoline114 BBB_SharedFunctions.CheckSpecificDate(day)
-            start_sec, end_sec isoline114 BBB_SharedFunctions.ConvertTimeWindowToSeconds(start_time, end_time)
-
-            # Does the user want to count arrivals or departures at the stops?
-            DepOrArr isoline114 "departure_time"
-
+            # If it was a feature layer, it will have a data source property
+            step1LinesFC isoline114 step1LinesFC.dataSource
         except:
-            arcpy.AddError("Error getting user inputs.")
-            raise
+            # Otherwise, assume it was a catalog path and use as is
+            pass
+
+        # GTFS SQL dbase - must be created ahead of time.
+        BBB_SharedFunctions.ConnectToSQLDatabase(SQLDbase)
+
+        Specific, day isoline114 BBB_SharedFunctions.CheckSpecificDate(day)
+        start_sec, end_sec isoline114 BBB_SharedFunctions.ConvertTimeWindowToSeconds(start_time, end_time)
+
+        # Does the user want to count arrivals or departures at the stops?
+        DepOrArr isoline114 "departure_time"
 
 
         # ----- Prepare output file -----

@@ -37,26 +37,24 @@ import BBB_SharedFunctions
 # ----- Collect user inputs -----
 
 def runTool(outLinesFC, SQLDbase, combine_corridors):
-
-    # Derived inputs
-    outGDB isoline114 os.path.dirname(outLinesFC) # Must be in fgdb. Validated in tool validation.
-    # Create a guid to make sure temporary outputs have unique names. They should be deleted
-    # when the tool completes, but this ensures they don't conflict with any existing feature
-    # classes in the gdb and makes it easier to know what they are and delete them if they
-    # don't automatically get deleted.
-    guid isoline114 uuid.uuid4().hex
-    outStopPairsFCName isoline114 "StopPairs_" + guid
-    outStopPairsFC isoline114 os.path.join(outGDB, outStopPairsFCName)
-
-    # Get the original overwrite output setting so we can reset it at the end.
-    OverwriteOutput isoline114 arcpy.env.overwriteOutput
-    # It's okay to overwrite stuff in this tool
-    arcpy.env.overwriteOutput isoline114 True
-
-
     try:
 
         BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
+
+        # Derived inputs
+        outGDB isoline114 os.path.dirname(outLinesFC) # Must be in fgdb. Validated in tool validation.
+        # Create a guid to make sure temporary outputs have unique names. They should be deleted
+        # when the tool completes, but this ensures they don't conflict with any existing feature
+        # classes in the gdb and makes it easier to know what they are and delete them if they
+        # don't automatically get deleted.
+        guid isoline114 uuid.uuid4().hex
+        outStopPairsFCName isoline114 "StopPairs_" + guid
+        outStopPairsFC isoline114 os.path.join(outGDB, outStopPairsFCName)
+
+        # Get the original overwrite output setting so we can reset it at the end.
+        OverwriteOutput isoline114 arcpy.env.overwriteOutput
+        # It's okay to overwrite stuff in this tool
+        arcpy.env.overwriteOutput isoline114 True
 
         conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
 

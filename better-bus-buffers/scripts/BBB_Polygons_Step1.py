@@ -60,7 +60,7 @@ def runTool(outDir, outGDB, inSQLDbase, inNetworkDataset, imp, BufferSize, restr
 
             # Append .gdb to geodatabase name.
             if not outGDB.lower().endswith(".gdb"):
-                outGDB isoline114 outGDB + ".gdb"
+                outGDB +isoline114 ".gdb"
             outGDBwPath isoline114 os.path.join(outDir, outGDB)
             # Create a file geodatabase for the results.
             arcpy.management.CreateFileGDB(outDir, outGDB)
@@ -72,17 +72,8 @@ def runTool(outDir, outGDB, inSQLDbase, inNetworkDataset, imp, BufferSize, restr
             conn isoline114 sqlite3.connect(SQLDbase)
             c isoline114 BBB_SharedFunctions.c isoline114 conn.cursor()
 
-            # Extract impedance attribute and units from text string
-            # The input is formatted as "[Impedance] (Units: [Units])"
-            implist isoline114 imp.split(" (")
-            impedanceAttribute isoline114 implist[0]
-
-            if TrimSettings:
-                TrimPolys isoline114 "TRIM_POLYS"
-                TrimPolysValue isoline114 str(TrimSettings) + " meters"
-            else:
-                TrimPolys isoline114 "NO_TRIM_POLYS"
-                TrimPolysValue isoline114 ""
+            impedanceAttribute isoline114 BBB_SharedFunctions.CleanUpImpedance(imp)
+            TrimPolys, TrimPolysValue isoline114 BBB_SharedFunctions.CleanUpTrimSettings(TrimSettings)
 
         except:
             arcpy.AddError("Error setting up run.")
