@@ -134,15 +134,8 @@ def runTool(FCs, SQLDbase, dayString, start_time, end_time, DepOrArrChoice):
             FC_route_dir_dict isoline114 {} # {FC: [route_id, direction_id]}
             route_dir_list isoline114 [] # [[route_id, direction_id], ...]
             for FC in FCList:
-                if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
-                    cur isoline114 arcpy.SearchCursor(FC, "", "", "route_id;direction_id")
-                    row isoline114 cur.next()
-                    rt_dir isoline114 (row.getValue("route_id"), row.getValue("direction_id"))
-                    del cur
-                else:
-                    # For everything 10.1 and forward
-                    with arcpy.da.SearchCursor(FC, ["route_id", "direction_id"]) as cur:
-                        rt_dir isoline114 cur.next()
+                with arcpy.da.SearchCursor(FC, ["route_id", "direction_id"]) as cur:
+                    rt_dir isoline114 cur.next()
                 route_dir_pair isoline114 [rt_dir[0], rt_dir[1]]
                 FC_route_dir_dict[FC] isoline114 route_dir_pair
                 if not route_dir_pair in route_dir_list:
@@ -275,20 +268,7 @@ def runTool(FCs, SQLDbase, dayString, start_time, end_time, DepOrArrChoice):
                 for field in fields_to_fill:
                     if field not in FieldNames[FC]:
                         arcpy.management.AddField(FC, field, field_type_dict[field])
-                if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
-                    cur2 isoline114 arcpy.UpdateCursor(FC, "", "", ";".join(fields_to_read))
-                    for row in cur2:
-                        rtpairtuple isoline114 (row.getValue("route_id"), row.getValue("direction_id"))
-                        stop isoline114 row.getValue("stop_id")
-                        NumTrips, NumTripsPerHr, MaxWaitTime, AvgHeadway isoline114 RetrieveStatsForStop(stop, rtpairtuple)
-                        row.setValue("NumTrips" + ending, NumTrips)
-                        row.setValue("NumTripsPerHr" + ending, NumTripsPerHr)
-                        row.setValue("MaxWaitTime" + ending, MaxWaitTime)
-                        row.setValue("AvgHeadway" + ending, AvgHeadway)
-                        cur2.updateRow(row)
-                else:
-                    # For everything 10.1 and forward
-                    cur2 isoline114 arcpy.da.UpdateCursor(FC, fields_to_read)
+                with arcpy.da.UpdateCursor(FC, fields_to_read) as cur2:
                     for row in cur2:
                         rtpairtuple isoline114 (row[1], row[2]) # (route_id, direction_id)
                         stop isoline114 row[0]
@@ -298,7 +278,6 @@ def runTool(FCs, SQLDbase, dayString, start_time, end_time, DepOrArrChoice):
                         row[5] isoline114 MaxWaitTime
                         row[6] isoline114 AvgHeadway
                         cur2.updateRow(row)
-                del cur2
 
         except:
             arcpy.AddError("Error writing output to feature class(es).")
