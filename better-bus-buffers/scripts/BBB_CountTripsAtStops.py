@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: BetterBusBuffers - Count Trips at Stops
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 8 February 2016
+## Last updated: 30 November 2017
 ############################################################################
 ''' BetterBusBuffers - Count Trips at Stops
 
@@ -14,7 +14,7 @@ the number of trips per hour and the maximum time between subsequent trips
 during that time window.
 '''
 ################################################################################
-'''Copyright 2016 Esri
+'''Copyright 2017 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -82,57 +82,28 @@ def runTool(outStops, SQLDbase, day, start_time, end_time, DepOrArrChoice):
             arcpy.AddMessage("Writing output data...")
 
             # Create an update cursor to add numtrips, trips/hr, and maxwaittime to stops
-            if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
-                if ".shp" in outStops:
-                    ucursor isoline114 arcpy.UpdateCursor(outStops, "", "", "stop_id; NumTrips; TripsPerHr; MaxWaitTm")
-                    for row in ucursor:
-                        NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                    [str(row.getValue("stop_id"))], stoptimedict,
-                                    CalcWaitTime, start_sec, end_sec)
-                        row.NumTrips isoline114 NumTrips
-                        row.TripsPerHr isoline114 NumTripsPerHr
-                        if MaxWaitTime isoline114isoline114 None:
-                            row.MaxWaitTm isoline114 -1
-                        else:
-                            row.MaxWaitTm isoline114 MaxWaitTime
-                        ucursor.updateRow(row)
-                else:
-                    ucursor isoline114 arcpy.UpdateCursor(outStops, "", "", "stop_id; NumTrips; NumTripsPerHr; MaxWaitTime")
-                    for row in ucursor:
-                        NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                    [str(row.getValue("stop_id"))], stoptimedict,
-                                    CalcWaitTime, start_sec, end_sec)
-                        row.NumTrips isoline114 NumTrips
-                        row.NumTripsPerHr isoline114 NumTripsPerHr
-                        row.MaxWaitTime isoline114 MaxWaitTime
-                        ucursor.updateRow(row)
-
+            if ".shp" in outStops:
+                ucursor isoline114 arcpy.da.UpdateCursor(outStops,
+                                            ["stop_id", "NumTrips",
+                                            "TripsPerHr",
+                                            "MaxWaitTm"])
             else:
-                # For everything 10.1 and forward
-                if ".shp" in outStops:
-                    ucursor isoline114 arcpy.da.UpdateCursor(outStops,
-                                                ["stop_id", "NumTrips",
-                                                "TripsPerHr",
-                                                "MaxWaitTm"])
+                ucursor isoline114 arcpy.da.UpdateCursor(outStops,
+                                            ["stop_id", "NumTrips",
+                                            "NumTripsPerHr",
+                                            "MaxWaitTime"])
+            for row in ucursor:
+                NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
+                            BBB_SharedFunctions.RetrieveStatsForSetOfStops(
+                                [str(row[0])], stoptimedict, CalcWaitTime,
+                                start_sec, end_sec)
+                row[1] isoline114 NumTrips
+                row[2] isoline114 NumTripsPerHr
+                if ".shp" in outStops and MaxWaitTime isoline114isoline114 None:
+                    row[3] isoline114 -1
                 else:
-                    ucursor isoline114 arcpy.da.UpdateCursor(outStops,
-                                                ["stop_id", "NumTrips",
-                                                "NumTripsPerHr",
-                                                "MaxWaitTime"])
-                for row in ucursor:
-                    NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114 \
-                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                    [str(row[0])], stoptimedict, CalcWaitTime,
-                                    start_sec, end_sec)
-                    row[1] isoline114 NumTrips
-                    row[2] isoline114 NumTripsPerHr
-                    if ".shp" in outStops and MaxWaitTime isoline114isoline114 None:
-                        row[3] isoline114 -1
-                    else:
-                        row[3] isoline114 MaxWaitTime
-                    ucursor.updateRow(row)
+                    row[3] isoline114 MaxWaitTime
+                ucursor.updateRow(row)
 
         except:
             arcpy.AddError("Error writing to output.")

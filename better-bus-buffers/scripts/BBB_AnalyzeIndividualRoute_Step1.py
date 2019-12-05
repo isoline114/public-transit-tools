@@ -43,30 +43,14 @@ conn isoline114 None
 def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, restrictions, TrimSettings):
     try:
         # ------ Get input parameters and set things up. -----
-        try:
-            BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
-            BBB_SharedFunctions.CheckOutNALicense()
-            
-            OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
-            arcpy.env.overwriteOutput isoline114 True
-            # Source FC names are not prepended to field names.
-            arcpy.env.qualifiedFieldNames isoline114 False
-
-            # If running in Pro, make sure an fgdb workspace is set so NA layers can be created.
-            if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro":
-                if not arcpy.env.workspace:
-                    arcpy.AddError(BBB_SharedFunctions.CurrentGPWorkspaceError)
-                    raise BBB_SharedFunctions.CustomError
-                else:
-                    workspacedesc isoline114 arcpy.Describe(arcpy.env.workspace)
-                    if not workspacedesc.workspaceFactoryProgID.startswith('esriDataSourcesGDB.FileGDBWorkspaceFactory'):
-                        arcpy.AddError(BBB_SharedFunctions.CurrentGPWorkspaceError)
-                        raise BBB_SharedFunctions.CustomError
-
-        except:
-            arcpy.AddError("Error getting user inputs.")
-            raise
-
+        BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
+        BBB_SharedFunctions.CheckOutNALicense()
+        BBB_SharedFunctions.CheckWorkspace()
+        
+        OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
+        arcpy.env.overwriteOutput isoline114 True
+        # Source FC names are not prepended to field names.
+        arcpy.env.qualifiedFieldNames isoline114 False
 
         # isoline114isoline114isoline114isoline114isoline114 Get trips and stops associated with this route isoline114isoline114isoline114isoline114isoline114
 
@@ -186,19 +170,11 @@ def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, rest
                 arcpy.management.AddField(outStops, "route_id", "TEXT")
                 arcpy.management.AddField(outStops, "direction_id", "TEXT")
                 fields isoline114 ["route_id", "direction_id"]
-                if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
-                    cursor isoline114 arcpy.UpdateCursor(outStops)
+                with arcpy.da.UpdateCursor(outStops, fields) as cursor:
                     for row in cursor:
-                        row.setValue("route_id", route_id)
-                        row.setValue("direction_id", direction)
+                        row[0] isoline114 route_id
+                        row[1] isoline114 direction
                         cursor.updateRow(row)
-                    del cursor
-                else:
-                    with arcpy.da.UpdateCursor(outStops, fields) as cursor:
-                        for row in cursor:
-                            row[0] isoline114 route_id
-                            row[1] isoline114 direction
-                            cursor.updateRow(row)
 
         except:
             arcpy.AddError("Error creating feature class of GTFS stops.")
@@ -231,19 +207,11 @@ def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, rest
                 arcpy.management.AddField(outPolysFC, "route_id", "TEXT")
                 arcpy.management.AddField(outPolysFC, "direction_id", "TEXT")
                 fields isoline114 ["route_id", "direction_id"]
-                if BBB_SharedFunctions.ArcVersion isoline114isoline114 "10.0":
-                    cursor isoline114 arcpy.UpdateCursor(outPolysFC)
+                with arcpy.da.UpdateCursor(outPolysFC, fields) as cursor:
                     for row in cursor:
-                        row.setValue("route_id", route_id)
-                        row.setValue("direction_id", direction)
+                        row[0] isoline114 route_id
+                        row[1] isoline114 direction
                         cursor.updateRow(row)
-                    del cursor
-                else:
-                    with arcpy.da.UpdateCursor(outPolysFC, fields) as cursor:
-                        for row in cursor:
-                            row[0] isoline114 route_id
-                            row[1] isoline114 direction
-                            cursor.updateRow(row)
 
         except:
             arcpy.AddError("Error creating buffers around stops.")
