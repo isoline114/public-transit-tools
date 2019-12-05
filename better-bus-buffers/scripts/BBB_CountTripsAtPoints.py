@@ -40,7 +40,6 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         BBB_SharedFunctions.CheckWorkspace()
         BBB_SharedFunctions.CheckOutNALicense()
 
-        #----- Get input parameters -----
         BBB_SharedFunctions.ConnectToSQLDatabase(SQLDbase)
 
         Specific, day isoline114 BBB_SharedFunctions.CheckSpecificDate(day)
@@ -49,6 +48,8 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         # Will we calculate the max wait time?
         CalcWaitTime isoline114 True
 
+        impedanceAttribute isoline114 BBB_SharedFunctions.CleanUpImpedance(imp)
+
         # Hard-wired OD variables
         ExcludeRestricted isoline114 "EXCLUDE"
         PathShape isoline114 "NO_LINES"
@@ -56,17 +57,9 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         uturns isoline114 "ALLOW_UTURNS"
         hierarchy isoline114 "NO_HIERARCHY"
 
-
-        #----- Set up the run -----
-
         # Output file designated by user
         outDir isoline114 os.path.dirname(outFile)
         outFilename isoline114 os.path.basename(outFile)
-
-        # Extract impedance attribute and units from text string
-        # The input is formatted as "[Impedance] (Units: [Units])"
-        implist isoline114 imp.split(" (")
-        impedanceAttribute isoline114 implist[0]
 
         # Source FC names are not prepended to field names.
         arcpy.env.qualifiedFieldNames isoline114 False
@@ -74,21 +67,7 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
         arcpy.env.overwriteOutput isoline114 True
 
-        # If ObjectID was selected as the unique ID, copy the values to a new field
-        # so they don't get messed up when copying the table.
-        pointsOID isoline114 arcpy.Describe(inPointsLayer).OIDFieldName
-        if inLocUniqueID isoline114isoline114 pointsOID:
-            try:
-                inLocUniqueID isoline114 "BBBUID"
-                arcpy.AddMessage("You have selected your input features' ObjectID field as the unique ID to use for this analysis. \
-    In order to use this field, we have to transfer the ObjectID values to a new field in your input data called '%s' because ObjectID values \
-    may change when the input data is copied to the output. Adding the '%s' field now, and calculating the values to be the same as the current \
-    ObjectID values..." % (inLocUniqueID, inLocUniqueID))
-                arcpy.management.AddField(inPointsLayer, inLocUniqueID, "LONG")
-                arcpy.management.CalculateField(inPointsLayer, inLocUniqueID, "!" + pointsOID + "!", "PYTHON_9.3")
-            except:
-                arcpy.AddError("Unable to add or calculate new unique ID field. Please fix your data or choose a different unique ID field.")
-                raise
+        inLocUniqueID isoline114 BBB_SharedFunctions.HandleOIDUniqueID(inPointsLayer, inLocUniqueID)
         inLocUniqueID_qualified isoline114 inLocUniqueID + "_Input"
 
         arcpy.AddMessage("Run set up successfully.")
