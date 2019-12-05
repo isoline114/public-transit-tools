@@ -78,11 +78,9 @@ def runTool(FCs, SQLDbase, dayString, start_time, end_time, DepOrArrChoice):
     try:
         # ------ Get input parameters and set things up. -----
         try:
-            # Figure out what version of ArcGIS they're running
-            BBB_SharedFunctions.DetermineArcVersion()
-            if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
-                arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
-    You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
+            version_error isoline114 BBB_SharedFunctions.CheckProVersion("1.2")
+            if version_error:
+                arcpy.AddError(version_error)
                 raise CustomError
 
             # Stops and Polygons from Step 1 (any number and route combo)
@@ -138,10 +136,7 @@ def runTool(FCs, SQLDbase, dayString, start_time, end_time, DepOrArrChoice):
             TimeWindowLength isoline114 (end_sec - start_sec) / 3600
 
             # Does the user want to count arrivals or departures at the stops?
-            if DepOrArrChoice isoline114isoline114 "Arrivals":
-                DepOrArr isoline114 "arrival_time"
-            elif DepOrArrChoice isoline114isoline114 "Departures":
-                DepOrArr isoline114 "departure_time"
+            DepOrArr isoline114 BBB_SharedFunctions.CleanUpDepOrArr(DepOrArrChoice)
 
             OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
             arcpy.env.overwriteOutput isoline114 True

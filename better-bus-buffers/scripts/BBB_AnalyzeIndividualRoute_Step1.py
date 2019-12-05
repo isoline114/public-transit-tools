@@ -47,11 +47,9 @@ def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, rest
     try:
         # ------ Get input parameters and set things up. -----
         try:
-            # Figure out what version of ArcGIS they're running
-            BBB_SharedFunctions.DetermineArcVersion()
-            if BBB_SharedFunctions.ProductName isoline114isoline114 "ArcGISPro" and BBB_SharedFunctions.ArcVersion in ["1.0", "1.1", "1.1.1"]:
-                arcpy.AddError("The BetterBusBuffers toolbox does not work in versions of ArcGIS Pro prior to 1.2.\
-    You have ArcGIS Pro version %s." % BBB_SharedFunctions.ArcVersion)
+            version_error isoline114 BBB_SharedFunctions.CheckProVersion("1.2")
+            if version_error:
+                arcpy.AddError(version_error)
                 raise CustomError
             
             #Check out the Network Analyst extension license
@@ -60,19 +58,6 @@ def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, rest
             else:
                 arcpy.AddError("You must have a Network Analyst license to use this tool.")
                 raise CustomError
-
-            # Extract impedance attribute and units from text string
-            # The input is formatted as "[Impedance] (Units: [Units])"
-            implist isoline114 imp.split(" (")
-            impedanceAttribute isoline114 implist[0]
-
-            # Determine the trim settings
-            if TrimSettings:
-                TrimPolys isoline114 "TRIM_POLYS"
-                TrimPolysValue isoline114 str(TrimSettings) + " meters"
-            else:
-                TrimPolys isoline114 "NO_TRIM_POLYS"
-                TrimPolysValue isoline114 ""
             
             OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
             arcpy.env.overwriteOutput isoline114 True
@@ -243,7 +228,8 @@ def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, rest
                     outputname +isoline114 str(direction)
                 outStops isoline114 os.path.join(outGDB, outputname)
 
-                polygons isoline114 BBB_SharedFunctions.MakeServiceAreasAroundStops(outStops, inNetworkDataset, impedanceAttribute, BufferSize, restrictions, TrimPolys, TrimPolysValue)
+                TrimPolys, TrimPolysValue isoline114 BBB_SharedFunctions.CleanUpTrimSettings(TrimSettings)
+                polygons isoline114 BBB_SharedFunctions.MakeServiceAreasAroundStops(outStops, inNetworkDataset, BBB_SharedFunctions.CleanUpImpedance(imp), BufferSize, restrictions, TrimPolys, TrimPolysValue)
 
                 # Join stop information to polygons and save as feature class
                 arcpy.management.AddJoin(polygons, "stop_id", outStops, "stop_id")
