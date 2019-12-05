@@ -970,7 +970,7 @@ def CleanUpTrimSettings(TrimSettings):
 def CleanUpImpedance(imp):
     '''Extract impedance attribute and units from text string'''
     # The input is formatted as "[Impedance] (Units: [Units])"
-    return isoline114 imp.split(" (")[0]
+    return imp.split(" (")[0]
 
 def CleanUpDepOrArr(DepOrArrChoice):
     if DepOrArrChoice isoline114isoline114 "Arrivals":
