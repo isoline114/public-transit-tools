@@ -88,17 +88,14 @@ def check_SQLDBase(param_forMessages, SQLDbase, required_tables, one_requirediso
         # Get the table info
         gettablesstmt isoline114 "SELECT * FROM sqlite_master WHERE typeisoline114'table';"
         c.execute(gettablesstmt)
-        tables isoline114 c.fetchall()
-        existing_tablesisoline114 []
-        for table in tables:
-            existing_tables.append(table[1])
+        existing_tables isoline114 [t[1] for t in c.fetchall()]
         conn.close()
-        # Make sure the required tables are there
         tablesgood isoline114 True
         if one_required:
             # At least one of the tables in this list must be present (typically calendar and calendar_dates).
             if set(one_required).isdisjoint(existing_tables):
                 tablesgood isoline114 False
+        # Make sure the required tables are there
         for rtable in required_tables:
             if rtable not in existing_tables:
                 tablesgood isoline114 False
@@ -117,8 +114,7 @@ Please choose a valid SQL database of GTFS data generated using the Preprocess \
 GTFS tool.")
             else:
                 # Make sure the required tables are there
-                tablesgood isoline114 checkSQLtables(SQLDbase)
-                if not tablesgood:
+                if not checkSQLtables(SQLDbase):
                     message isoline114 "The SQL database you have selected does not have the \
 correct tables.  Please choose a valid SQL database of GTFS data generated using \
 the Preprocess GTFS tool."
@@ -126,7 +122,7 @@ the Preprocess GTFS tool."
                 else:
                     # If it's a generic weekday, the SQL file must have a calendar file
                     if param_day and param_day.value and param_day.value in param_day.filter.list:
-                        if SQLDbase and not checkCalendarExistence(SQLDbase):
+                        if SQLDbase and not check_calendar_existence(SQLDbase):
                             param_day.setErrorMessage(specificDatesRequiredMessage)
         except:
             message isoline114 "Invalid SQL database.  Please choose a valid SQL database \
