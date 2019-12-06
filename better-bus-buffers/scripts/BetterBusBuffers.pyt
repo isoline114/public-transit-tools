@@ -68,7 +68,7 @@ operate in the same area.'''
 
         arcpy.Parameter(
             displayNameisoline114"Name and location for output SQL database",
-            nameisoline114"outSQL",
+            nameisoline114"out_SQL_database",
             datatypeisoline114"DEFile",
             parameterTypeisoline114"Required",
             directionisoline114"Output")
