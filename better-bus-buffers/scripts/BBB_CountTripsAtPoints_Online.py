@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: BetterBusBuffers
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 27 July 2016
+## Last updated: 1 December 2017
 ############################################################################
 ''' BetterBusBuffers - Count Trips at Points
 
@@ -18,7 +18,7 @@ This version of the tool uses the ArcGIS Online Origin Destionation cost matrix
 service.
 '''
 ################################################################################
-'''Copyright 2016 Esri
+'''Copyright 2017 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -35,43 +35,43 @@ import arcpy
 import BBB_SharedFunctions
 
 
-def runOD(Points, Stops):
-    # Call the OD Cost Matrix service for this set of chunks
-    result isoline114 ODservice.GenerateOriginDestinationCostMatrix(Points, Stops, TravelMode, Distance_Unitsisoline114BufferUnits, Cutoffisoline114BufferSize,
-                                                    Origin_Destination_Line_Shapeisoline114PathShape)
-
-    # Check the status of the result object every 0.5 seconds 
-    # until it has a value of 4(succeeded) or greater 
-    while result.status < 4:
-        time.sleep(0.5)
-    
-    # Print any warning or error messages returned from the tool
-    result_severity isoline114 result.maxSeverity
-    if result_severity isoline114isoline114 2:
-        errors isoline114 result.getMessages(2)
-        if "No solution found." in errors:
-            # No destinations were found for the origins, which probably just means they were too far away.
-            pass
-        else:
-            arcpy.AddError("An error occured when running the tool")
-            arcpy.AddError(result.getMessages(2))
-            raise BBB_SharedFunctions.CustomError
-    elif result_severity isoline114isoline114 1:
-        arcpy.AddWarning("Warnings were returned when running the tool")
-        arcpy.AddWarning(result.getMessages(1))
-        
-    # Get the resulting OD Lines and store the stops that are reachable from points.
-    if result_severity !isoline114 2:
-        linesSubLayer isoline114 result.getOutput(1)
-        with arcpy.da.SearchCursor(linesSubLayer, ["OriginOID", "DestinationOID"]) as ODCursor:
-            for row in ODCursor:
-                UID isoline114 pointsOIDdict[row[0]]
-                SID isoline114 stopOIDdict[row[1]]
-                PointsAndStops.setdefault(str(UID), []).append(str(SID))
-
-
 def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, end_time, 
             BufferSize, BufferUnits, DepOrArrChoice, username, password):
+
+    def runOD(Points, Stops):
+        # Call the OD Cost Matrix service for this set of chunks
+        result isoline114 ODservice.GenerateOriginDestinationCostMatrix(Points, Stops, TravelMode, Distance_Unitsisoline114BufferUnits, Cutoffisoline114BufferSize,
+                                                        Origin_Destination_Line_Shapeisoline114PathShape)
+
+        # Check the status of the result object every 0.5 seconds 
+        # until it has a value of 4(succeeded) or greater 
+        while result.status < 4:
+            time.sleep(0.5)
+        
+        # Print any warning or error messages returned from the tool
+        result_severity isoline114 result.maxSeverity
+        if result_severity isoline114isoline114 2:
+            errors isoline114 result.getMessages(2)
+            if "No solution found." in errors:
+                # No destinations were found for the origins, which probably just means they were too far away.
+                pass
+            else:
+                arcpy.AddError("An error occured when running the tool")
+                arcpy.AddError(result.getMessages(2))
+                raise BBB_SharedFunctions.CustomError
+        elif result_severity isoline114isoline114 1:
+            arcpy.AddWarning("Warnings were returned when running the tool")
+            arcpy.AddWarning(result.getMessages(1))
+            
+        # Get the resulting OD Lines and store the stops that are reachable from points.
+        if result_severity !isoline114 2:
+            linesSubLayer isoline114 result.getOutput(1)
+            with arcpy.da.SearchCursor(linesSubLayer, ["OriginOID", "DestinationOID"]) as ODCursor:
+                for row in ODCursor:
+                    UID isoline114 pointsOIDdict[row[0]]
+                    SID isoline114 stopOIDdict[row[1]]
+                    PointsAndStops.setdefault(str(UID), []).append(str(SID))
+
     try:
         # Source FC names are not prepended to field names.
         arcpy.env.qualifiedFieldNames isoline114 False
@@ -96,7 +96,6 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         outDir isoline114 os.path.dirname(outFile)
         outFilename isoline114 os.path.basename(outFile)
         ispgdb isoline114 "esriDataSourcesGDB.AccessWorkspaceFactory" in arcpy.Describe(outDir).workspaceFactoryProgID
-        isshp isoline114 ".shp" in outFilename
 
         inLocUniqueID isoline114 BBB_SharedFunctions.HandleOIDUniqueID(inPointsLayer, inLocUniqueID)
 
@@ -140,8 +139,6 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
         try:
             arcpy.AddMessage("Getting GTFS stops...")
             tempstopsname isoline114 "Temp_Stops"
-            if isshp:
-                tempstopsname +isoline114 ".shp"
             StopsLayer, StopList isoline114 BBB_SharedFunctions.MakeStopsFeatureClass(os.path.join(outDir, tempstopsname))
             
             # Select only the stops within a reasonable distance of points to reduce problem size
@@ -164,10 +161,7 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
             arcpy.AddMessage("Preparing input points...")
             
             # Select only the points within a reasonable distance of stops to reduce problem size
-            if isshp:
-                temppointsname isoline114 outFilename.split(".shp")[0] + "_Temp.shp"
-            else:
-                temppointsname isoline114 outFilename + "_Temp"
+            temppointsname isoline114 outFilename + "_Temp"
             relevantPoints isoline114 os.path.join(outDir, temppointsname)
             arcpy.management.MakeFeatureLayer(inPointsLayer, "PointsToKeep")
             arcpy.management.SelectLayerByLocation("PointsToKeep", "WITHIN_A_DISTANCE_GEODESIC", StopsLayer, BufferLinearUnit)
@@ -279,46 +273,30 @@ def runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, en
 
             arcpy.management.CopyFeatures(inPointsLayer, outFile)
             # Add a field to the output file for number of trips and num trips / hour.
-            if isshp:
-                arcpy.management.AddField(outFile, "NumTrips", "SHORT")
-                arcpy.management.AddField(outFile, "TripsPerHr", "DOUBLE")
-                arcpy.management.AddField(outFile, "NumStops", "SHORT")
-                arcpy.management.AddField(outFile, "MaxWaitTm", "SHORT")
-            else:
-                arcpy.management.AddField(outFile, "NumTrips", "SHORT")
-                arcpy.management.AddField(outFile, "NumTripsPerHr", "DOUBLE")
-                arcpy.management.AddField(outFile, "NumStopsInRange", "SHORT")
-                arcpy.management.AddField(outFile, "MaxWaitTime", "SHORT")
+            arcpy.management.AddField(outFile, "NumTrips", "SHORT")
+            arcpy.management.AddField(outFile, "NumTripsPerHr", "DOUBLE")
+            arcpy.management.AddField(outFile, "NumStopsInRange", "SHORT")
+            arcpy.management.AddField(outFile, "MaxWaitTime", "SHORT")
 
-            if isshp:
-                ucursor isoline114 arcpy.da.UpdateCursor(outFile,
-                                                [inLocUniqueID[0:10], "NumTrips",
-                                                "TripsPerHr", "NumStops",
-                                                "MaxWaitTm"])
-            else:
-                ucursor isoline114 arcpy.da.UpdateCursor(outFile,
+            with arcpy.da.UpdateCursor(outFile,
                                             [inLocUniqueID, "NumTrips",
                                             "NumTripsPerHr", "NumStopsInRange",
-                                            "MaxWaitTime"])
-            for row in ucursor:
-                try:
-                    ImportantStops isoline114 PointsAndStops[str(row[0])]
-                except KeyError:
-                    # This point had no stops in range
-                    ImportantStops isoline114 []
-                NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114\
-                                BBB_SharedFunctions.RetrieveStatsForSetOfStops(
-                                    ImportantStops, stoptimedict, CalcWaitTime,
-                                    start_sec, end_sec)
-                row[1] isoline114 NumTrips
-                row[2] isoline114 NumTripsPerHr
-                row[3] isoline114 NumStopsInRange
-                if isshp and MaxWaitTime isoline114isoline114 None:
-                    row[4] isoline114 -1
-                else:
+                                            "MaxWaitTime"]) as ucursor:
+                for row in ucursor:
+                    try:
+                        ImportantStops isoline114 PointsAndStops[str(row[0])]
+                    except KeyError:
+                        # This point had no stops in range
+                        ImportantStops isoline114 []
+                    NumTrips, NumTripsPerHr, NumStopsInRange, MaxWaitTime isoline114\
+                                    BBB_SharedFunctions.RetrieveStatsForSetOfStops(
+                                        ImportantStops, stoptimedict, CalcWaitTime,
+                                        start_sec, end_sec)
+                    row[1] isoline114 NumTrips
+                    row[2] isoline114 NumTripsPerHr
+                    row[3] isoline114 NumStopsInRange
                     row[4] isoline114 MaxWaitTime
-                ucursor.updateRow(row)
-            del ucursor
+                    ucursor.updateRow(row)
                     
         except:
             arcpy.AddError("Error writing output.")
