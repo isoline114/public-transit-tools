@@ -181,7 +181,7 @@ the number of transit trips available within a short walk during a time window.'
 
         param_max_impedance isoline114 arcpy.Parameter(
             displayNameisoline114"Max travel time or distance between points and stops (in the units of your impedance attribute)",
-            nameisoline114"max_impedanceance",
+            nameisoline114"max_impedance",
             datatypeisoline114"GPDouble",
             parameterTypeisoline114"Required",
             directionisoline114"Input")
