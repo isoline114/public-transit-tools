@@ -209,6 +209,8 @@ the values will be 0 or <Null>." % (route_id, str(direction_id), str(day)))
         try:
             arcpy.AddMessage("Calculating the number of transit trips available during the time window...")
 
+            frequencies_dict isoline114 BBB_SharedFunctions.MakeFrequenciesDict()
+
             stoptimedict_rtdirpair isoline114 {}
             for rtdirpair in list(set([rt for rt in trip_route_dict.keys() + trip_route_dict_yest.keys() + trip_route_dict_tom.keys()])):
 
@@ -218,17 +220,17 @@ the values will be 0 or <Null>." % (route_id, str(direction_id), str(day)))
                 stoptimedict_tom isoline114 {}
                 try:
                     triplist isoline114 trip_route_dict[rtdirpair]
-                    stoptimedict isoline114 BBB_SharedFunctions.GetStopTimesForStopsInTimeWindow(start_sec, end_sec, DepOrArr, triplist, "today")
+                    stoptimedict isoline114 BBB_SharedFunctions.GetStopTimesForStopsInTimeWindow(start_sec, end_sec, DepOrArr, triplist, "today", frequencies_dict)
                 except KeyError: # No trips
                     pass
                 try:
                     triplist_yest isoline114 trip_route_dict_yest[rtdirpair]
-                    stoptimedict_yest isoline114 BBB_SharedFunctions.GetStopTimesForStopsInTimeWindow(start_sec, end_sec, DepOrArr, triplist_yest, "yesterday")
+                    stoptimedict_yest isoline114 BBB_SharedFunctions.GetStopTimesForStopsInTimeWindow(start_sec, end_sec, DepOrArr, triplist_yest, "yesterday", frequencies_dict)
                 except KeyError: # No trips
                     pass
                 try:
                     triplist_tom isoline114 trip_route_dict_tom[rtdirpair]
-                    stoptimedict_tom isoline114 BBB_SharedFunctions.GetStopTimesForStopsInTimeWindow(start_sec, end_sec, DepOrArr, triplist_tom, "tomorrow")
+                    stoptimedict_tom isoline114 BBB_SharedFunctions.GetStopTimesForStopsInTimeWindow(start_sec, end_sec, DepOrArr, triplist_tom, "tomorrow", frequencies_dict)
                 except KeyError: # No trips
                     pass
 
