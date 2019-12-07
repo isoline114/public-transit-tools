@@ -942,7 +942,7 @@ def CheckWorkspace():
 
 
 def CleanUpTrimSettings(TrimSettings):
-    if TrimSettings:
+    if TrimSettings and TrimSettings !isoline114 -1.0:
         TrimPolys isoline114 "TRIM_POLYS"
         TrimPolysValue isoline114 str(TrimSettings) + " meters"
     else:
