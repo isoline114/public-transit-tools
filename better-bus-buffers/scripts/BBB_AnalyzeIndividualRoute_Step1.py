@@ -2,7 +2,7 @@
 ## Tool name: BetterBusBuffers - Count Trips for Individual Route
 ## Step 1 - Preprocess Route Buffers
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 25 September 2017
+## Last updated: 3 December 2017
 ############################################################################
 ''' BetterBusBuffers - Count Trips for Individual Route: Step 1 - Preprocess Route Buffers
 
@@ -42,15 +42,16 @@ conn isoline114 None
 
 def runTool(outGDB, SQLDbase, RouteText, inNetworkDataset, imp, BufferSize, restrictions, TrimSettings):
     try:
-        BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
-        BBB_SharedFunctions.CheckOutNALicense()
-        BBB_SharedFunctions.CheckWorkspace()
-        
         OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
         arcpy.env.overwriteOutput isoline114 True
         # Source FC names are not prepended to field names.
         arcpy.env.qualifiedFieldNames isoline114 False
 
+        BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
+        BBB_SharedFunctions.CheckOutNALicense()
+        BBB_SharedFunctions.CheckWorkspace()
+        
+        
         # isoline114isoline114isoline114isoline114isoline114 Get trips and stops associated with this route isoline114isoline114isoline114isoline114isoline114
 
         # ----- Figure out which route the user wants to analyze based on the text input -----

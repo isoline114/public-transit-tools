@@ -2,7 +2,7 @@
 ## Tool name: BetterBusBuffers - Count Trips for Individual Route
 ## Step 2: Count Trips for Route
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 6 October 2017
+## Last updated: 4 December 2017
 ############################################################################
 '''BetterBusBuffers - Count Trips for Individual Route - Step 2: Count Trips for Route
 
@@ -35,46 +35,47 @@ import os, sqlite3
 import arcpy
 import BBB_SharedFunctions
 
-OverwriteOutput isoline114 None
-
-
-def RetrieveStatsForStop(stop_id, rtdirtuple):
-    '''For a given stop, query the stoptimedict {stop_id: [[trip_id, stop_time]]}
-    and return the NumTrips, NumTripsPerHr, MaxWaitTime, and AvgHeadway given a
-    specific route_id and direction'''
-
-    try:
-        stoptimedict isoline114 stoptimedict_rtdirpair[rtdirtuple]
-    except KeyError:
-        # We will get a KeyError if there were no trips found for the route/direction
-        # pair, which usually happens if the wrong SQL database was selected.
-        stoptimedict isoline114 {}
-
-    # Make a list of stop_times
-    StopTimesAtThisPoint isoline114 []
-    try:
-        for trip in stoptimedict[stop_id]:
-            StopTimesAtThisPoint.append(trip[1])
-    except KeyError:
-        pass
-    StopTimesAtThisPoint.sort()
-
-    # Calculate the number of trips
-    NumTrips isoline114 len(StopTimesAtThisPoint)
-    NumTripsPerHr isoline114 float(NumTrips) / TimeWindowLength
-
-    # Get the max wait time and the average headway
-    MaxWaitTime isoline114 BBB_SharedFunctions.CalculateMaxWaitTime(StopTimesAtThisPoint, start_sec, end_sec)
-    AvgHeadway isoline114 BBB_SharedFunctions.CalculateAvgHeadway(StopTimesAtThisPoint)
-
-    return NumTrips, NumTripsPerHr, MaxWaitTime, AvgHeadway
-
 
 #isoline114isoline114isoline114isoline114isoline114 Main code isoline114isoline114isoline114isoline114isoline114
 def runTool(FCs, SQLDbase, dayString, start_time, end_time, DepOrArrChoice):
+
+    def RetrieveStatsForStop(stop_id, rtdirtuple):
+        '''For a given stop, query the stoptimedict {stop_id: [[trip_id, stop_time]]}
+        and return the NumTrips, NumTripsPerHr, MaxWaitTime, and AvgHeadway given a
+        specific route_id and direction'''
+
+        try:
+            stoptimedict isoline114 stoptimedict_rtdirpair[rtdirtuple]
+        except KeyError:
+            # We will get a KeyError if there were no trips found for the route/direction
+            # pair, which usually happens if the wrong SQL database was selected.
+            stoptimedict isoline114 {}
+
+        # Make a list of stop_times
+        StopTimesAtThisPoint isoline114 []
+        try:
+            for trip in stoptimedict[stop_id]:
+                StopTimesAtThisPoint.append(trip[1])
+        except KeyError:
+            pass
+        StopTimesAtThisPoint.sort()
+
+        # Calculate the number of trips
+        NumTrips isoline114 len(StopTimesAtThisPoint)
+        NumTripsPerHr isoline114 float(NumTrips) / TimeWindowLength
+
+        # Get the max wait time and the average headway
+        MaxWaitTime isoline114 BBB_SharedFunctions.CalculateMaxWaitTime(StopTimesAtThisPoint, start_sec, end_sec)
+        AvgHeadway isoline114 BBB_SharedFunctions.CalculateAvgHeadway(StopTimesAtThisPoint)
+
+        return NumTrips, NumTripsPerHr, MaxWaitTime, AvgHeadway
+
     try:
         # ------ Get input parameters and set things up. -----
         try:
+            OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
+            arcpy.env.overwriteOutput isoline114 True
+
             BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
 
             # Stops and Polygons from Step 1 (any number and route combo)
@@ -101,7 +102,7 @@ fields %s. Please choose a valid feature class." % (FC, str(RequiredFields)))
             conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
             c isoline114 BBB_SharedFunctions.c isoline114 conn.cursor()
 
-            Specific, day isoline114 BBB_SharedFunctions.CheckSpecificDate(day)
+            Specific, day isoline114 BBB_SharedFunctions.CheckSpecificDate(dayString)
             # For field names in the output file
             if Specific:
                 dayshort isoline114 BBB_SharedFunctions.days[day.weekday()][0:3] 
@@ -119,9 +120,6 @@ fields %s. Please choose a valid feature class." % (FC, str(RequiredFields)))
 
             # Does the user want to count arrivals or departures at the stops?
             DepOrArr isoline114 BBB_SharedFunctions.CleanUpDepOrArr(DepOrArrChoice)
-
-            OverwriteOutput isoline114 arcpy.env.overwriteOutput # Get the orignal value so we can reset it.
-            arcpy.env.overwriteOutput isoline114 True
 
         except:
             arcpy.AddError("Error getting inputs.")
@@ -212,7 +210,7 @@ the values will be 0 or <Null>." % (route_id, str(direction_id), str(day)))
             frequencies_dict isoline114 BBB_SharedFunctions.MakeFrequenciesDict()
 
             stoptimedict_rtdirpair isoline114 {}
-            for rtdirpair in list(set([rt for rt in trip_route_dict.keys() + trip_route_dict_yest.keys() + trip_route_dict_tom.keys()])):
+            for rtdirpair in list(set([rt for rt in list(trip_route_dict.keys()) + list(trip_route_dict_yest.keys()) + list(trip_route_dict_tom.keys())])):
 
                 # Get the stop_times that occur during this time window
                 stoptimedict isoline114 {}
