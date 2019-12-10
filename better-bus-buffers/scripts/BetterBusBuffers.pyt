@@ -359,10 +359,9 @@ network datasets or a Network Analyst license'''
         end_time isoline114 parameters[6].valueAsText
         BufferSize isoline114 parameters[7].value
         BufferUnits isoline114 parameters[8].valueAsText
-        restrictions isoline114 parameters[9].valueAsText
-        DepOrArrChoice isoline114 parameters[10].valueAsText
-        username isoline114 parameters[11].valueAsText
-        password isoline114 parameters[12].valueAsText
+        DepOrArrChoice isoline114 parameters[9].valueAsText
+        username isoline114 parameters[10].valueAsText
+        password isoline114 parameters[11].valueAsText
         BBB_CountTripsAtPoints_Online.runTool(outFile, SQLDbase, inPointsLayer, inLocUniqueID, day, start_time, end_time, 
             BufferSize, BufferUnits, DepOrArrChoice, username, password)
         return
