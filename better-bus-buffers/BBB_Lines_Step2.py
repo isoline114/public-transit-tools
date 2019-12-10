@@ -2,7 +2,7 @@
 ## Tool name: BetterBusBuffers - Count Trips on Lines
 ## Step 2 - Count Trips on Lines
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 6 October 2017
+## Last updated: 5 December 2017
 ############################################################################
 ''' BetterBusBuffers - Count Trips on Lines
 
