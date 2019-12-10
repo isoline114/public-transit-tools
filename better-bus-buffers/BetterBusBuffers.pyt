@@ -1086,7 +1086,7 @@ param_buffer_size isoline114 CommonParameter(
     "Input")
 
 param_polygon_trim isoline114 CommonParameter(
-    "Polygon trim (in meters) (Leave blank for no trim.)",
+    "Polygon trim (in meters) (Enter -1 for no trim.)",
     "polygon_trim",
     "GPDouble",
     "Optional",
