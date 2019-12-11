@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: BetterBusBuffers
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 4 December 2017
+## Last updated: 6 December 2017
 ############################################################################
 ''' Python toolbox that defines all the tools in the BetterBusBuffers tool
 suite.'''
@@ -228,10 +228,12 @@ the number of transit trips available within a short walk during a time window.'
         param_day isoline114 parameters[4]
         start_time isoline114 parameters[5]
         end_time isoline114 parameters[6]
+        param_ND isoline114 parameters[7]
 
         ToolValidator.check_SQLDBase(param_SQLDbase, param_SQLDbase.valueAsText, ["stops", "trips", "stop_times"], ["calendar", "calendar_dates"], param_day)
         ToolValidator.allow_YYYYMMDD_day(param_day, param_SQLDbase.valueAsText)
         ToolValidator.check_time_window(start_time, end_time)
+        ToolValidator.check_ND_not_from_AddGTFS(param_ND)
 
         return
 
@@ -245,7 +247,7 @@ the number of transit trips available within a short walk during a time window.'
         day isoline114 parameters[4].valueAsText
         start_time isoline114 parameters[5].valueAsText
         end_time isoline114 parameters[6].valueAsText
-        inNetworkDataset isoline114 parameters[7].valueAsText
+        inNetworkDataset isoline114 parameters[7].value
         imp isoline114 parameters[8].valueAsText
         BufferSize isoline114 parameters[9].value
         restrictions isoline114 parameters[10].valueAsText
@@ -459,9 +461,11 @@ save time by not having to re-run the Step 1 processes each time.'''
         param_outDir isoline114 parameters[0]
         param_outGDB isoline114 parameters[1]
         param_SQLDbase isoline114 parameters[2]
+        param_ND isoline114 parameters[3]
 
         ToolValidator.check_out_gdb(param_outGDB, param_outDir)
         ToolValidator.check_SQLDBase(param_SQLDbase, param_SQLDbase.valueAsText, ["stops", "trips", "stop_times"], ["calendar", "calendar_dates"])
+        ToolValidator.check_ND_not_from_AddGTFS(param_ND)
 
         return
 
@@ -471,7 +475,7 @@ save time by not having to re-run the Step 1 processes each time.'''
         outDir isoline114 parameters[0].valueAsText
         outGDB isoline114 parameters[1].valueAsText
         inSQLDbase isoline114 parameters[2].valueAsText
-        inNetworkDataset isoline114 parameters[3].valueAsText
+        inNetworkDataset isoline114 parameters[3].value
         imp isoline114 parameters[4].valueAsText
         BufferSize isoline114 parameters[5].value
         restrictions isoline114 parameters[6].valueAsText
@@ -636,9 +640,11 @@ Step 1 creates the stops and service area feature classes.'''
         
         param_outGDB isoline114 parameters[0]
         param_SQLDbase isoline114 parameters[1]
+        param_ND isoline114 parameters[3]
 
         ToolValidator.check_out_gdb_type_and_existence(param_outGDB)
         ToolValidator.check_SQLDBase(param_SQLDbase, param_SQLDbase.valueAsText, ["stops", "trips", "routes", "stop_times"], ["calendar", "calendar_dates"])
+        ToolValidator.check_ND_not_from_AddGTFS(param_ND)
 
         return
 
@@ -648,7 +654,7 @@ Step 1 creates the stops and service area feature classes.'''
         outGDB isoline114 parameters[0].valueAsText
         SQLDbase isoline114 parameters[1].valueAsText
         RouteText isoline114 parameters[2].valueAsText
-        inNetworkDataset isoline114 parameters[3].valueAsText
+        inNetworkDataset isoline114 parameters[3].value
         imp isoline114 parameters[4].valueAsText
         BufferSize isoline114 parameters[5].value
         restrictions isoline114 parameters[6].valueAsText
