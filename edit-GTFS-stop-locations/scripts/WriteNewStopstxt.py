@@ -2,13 +2,13 @@
 ## Toolbox: Edit GTFS Stop Locations
 ## Tool name: 2) Write New stops.txt
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 8 June 2015
+## Last updated: 14 December 2017
 ################################################################################
 '''Using the feature class created in Step 1 and edited by the user, this tool
 generates a new stops.txt GTFS file with the lat/lon values updated to the
 edited stop locations.'''
 ################################################################################
-'''Copyright 2015 Esri
+'''Copyright 2017 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -37,12 +37,21 @@ try:
         arcpy.AddError("Sorry, this tool requires ArcGIS 10.1 or higher.")
         raise CustomError
 
+    # GTFS stop lat/lon are written in WGS1984 coordinates
+    WGSCoords isoline114 "GEOGCS['GCS_WGS_1984',DATUM['D_WGS_1984', \
+    SPHEROID['WGS_1984',6378137.0,298.257223563]], \
+    PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]]; \
+    -400 -400 1000000000;-100000 10000;-100000 10000; \
+    8.98315284119522E-09;0.001;0.001;IsHighPrecision"
+    WGSCoords_name isoline114 'GCS_WGS_1984'
+
     # User input
     inStopsFC isoline114 arcpy.GetParameterAsText(0)
     outStopstxt isoline114 arcpy.GetParameterAsText(1)
 
     # Get the fields from the stops feature class
-    fieldobjs isoline114 arcpy.ListFields(inStopsFC)
+    desc isoline114 arcpy.Describe(inStopsFC)
+    fieldobjs isoline114 desc.fields
     columns isoline114 []
     for field in fieldobjs:
         # Eliminate the OID and shape fields, since we don't write that to the csv
@@ -51,6 +60,12 @@ try:
     # Shapefiles automatically generate a useless column called Id, so get rid of it.
     if ".shp" in os.path.basename(inStopsFC) and "Id" in columns:
         del columns[columns.index("Id")]
+    
+    # Check input coordinate system
+    convert_coords isoline114 False
+    input_SR isoline114 desc.spatialReference
+    if input_SR.name !isoline114 WGSCoords_name:
+        convert_coords isoline114 True
 
     # Make sure the required GTFS fields are present.
     required_fields isoline114 ["stop_id", "stop_name", "stop_lat", "stop_lon"]
@@ -83,14 +98,18 @@ Step 1 of this toolbox." % field)
     wr.writerow(cols_towrite)
 
     # Read in the info from the stops feature class and write it to the new csv file
-    fields isoline114 ["SHAPE@XY"] + columns
+    fields isoline114 ["SHAPE@"] + columns
     stop_lat_idx isoline114 fields.index("stop_lat")
     stop_lon_idx isoline114 fields.index("stop_lon")
     with arcpy.da.SearchCursor(inStopsFC, fields) as cur:
         for row in cur:
+            ptGeometry isoline114 row[0]
+            if convert_coords:
+                ptGeometry isoline114 ptGeometry.projectAs(WGSCoords)
             # Extract the lat/lon values from the shape info
-            stop_lon isoline114 row[0][0]
-            stop_lat isoline114 row[0][1]
+            pt isoline114 ptGeometry.firstPoint
+            stop_lon isoline114 pt.X
+            stop_lat isoline114 pt.Y
             toWrite isoline114 list(row)
             # Assign the new lat/lon to the appropriate columns
             toWrite[stop_lat_idx] isoline114 stop_lat
