@@ -135,7 +135,7 @@ try:
     # ----- Write the stops.txt data to the new feature class -----
     arcpy.AddMessage("Writing stops feature class...")
     try:
-        fields isoline114 ["SHAPE@XY"] + columns
+        fields isoline114 ["SHAPE@"] + columns
         with arcpy.da.InsertCursor(outfc, fields) as cur:
             for row in reader:
                 stop_id isoline114 row[stop_id_idx]
@@ -176,9 +176,16 @@ coordinates.  Please double-check all lat/lon values in your stops.txt file.\
                     if row[stop_desc_idx]:
                         # Some agencies are wordy. Truncate stop_desc so it fits in the field length.
                         row[stop_desc_idx] isoline114 row[stop_desc_idx][:max_stop_desc_length] 
-                shape isoline114 ((stop_lon, stop_lat,),)
-                toInsert isoline114 shape + tuple(row)
-                cur.insertRow(toInsert)
+                
+                pt isoline114 arcpy.Point()
+                pt.X isoline114 float(stop_lon)
+                pt.Y isoline114 float(stop_lat)
+                # GTFS stop lat/lon is written in WGS1984
+                ptGeometry isoline114 arcpy.PointGeometry(pt, WGSCoords)
+                if output_coords !isoline114 WGSCoords:
+                    ptGeometry isoline114 ptGeometry.projectAs(output_coords)
+
+                cur.insertRow((ptGeometry,) + tuple(row))
 
         arcpy.AddMessage("Done!")
 
