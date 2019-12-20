@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Display GTFS in ArcGIS
 ## Created by: isoline114, Esri, hello@isoline.tech
-## Last updated: 25 September 2017
+## Last updated: 14 December 2017
 ############################################################################
 ''' Display GTFS Route Shapes
 Display GTFS Route Shapes converts GTFS route and shape data into an ArcGIS
@@ -39,6 +39,7 @@ WGSCoords isoline114 "GEOGCS['GCS_WGS_1984',DATUM['D_WGS_1984', \
     PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]]; \
     -400 -400 1000000000;-100000 10000;-100000 10000; \
     8.98315284119522E-09;0.001;0.001;IsHighPrecision"
+output_coords isoline114 None
 
 # Explicitly set max allowed length for route_desc. Some agencies are wordy.
 max_route_desc_length isoline114 250
@@ -131,7 +132,9 @@ def make_GTFS_lines_from_Shapes(shape, routeisoline114None):
         pt.X isoline114 float(point[1])
         pt.Y isoline114 float(point[0])
         array.add(pt)
-    polyline isoline114 arcpy.Polyline(array)
+    polyline isoline114 arcpy.Polyline(array, WGSCoords)
+    if output_coords !isoline114 WGSCoords:
+        polyline isoline114 polyline.projectAs(output_coords)
 
     # Add the polyline feature to the output feature class
     if ArcVersion isoline114isoline114 "10.0":
@@ -202,8 +205,18 @@ def main(inGTFSdir, OutShapesFC):
         arcpy.env.overwriteOutput isoline114 True
 
         outGDB isoline114 os.path.dirname(OutShapesFC)
+        # If the output location is a feature dataset, we have to match the coordinate system
+        global output_coords
+        desc_outgdb isoline114 arcpy.Describe(outGDB)
+        if hasattr(desc_outgdb, "spatialReference"):
+            output_coords isoline114 desc_outgdb.spatialReference
+            SQLDbaseLoc isoline114 os.path.dirname(outGDB)
+        else:
+            output_coords isoline114 WGSCoords
+            SQLDbaseLoc isoline114 outGDB
+        
         OutShapesFCname isoline114 os.path.basename(OutShapesFC)
-        SQLDbase isoline114 os.path.join(outGDB, OutShapesFCname.replace(".shp", "") + ".sql")
+        SQLDbase isoline114 os.path.join(SQLDbaseLoc, OutShapesFCname.replace(".shp", "") + ".sql")
 
         # Check the user's version
         if not ArcVersion or not ProductName:
@@ -293,7 +306,7 @@ the output feature class's attribute table with route information.")
         arcpy.AddMessage("Creating output feature class...")
 
         # Create the output feature class and add the right fields
-        arcpy.management.CreateFeatureclass(outGDB, OutShapesFCname, "POLYLINE", "", "", "", WGSCoords)
+        arcpy.management.CreateFeatureclass(outGDB, OutShapesFCname, "POLYLINE", "", "", "", output_coords)
         # Shapefiles can't have field names longer than 10 characters
         if ".shp" in OutShapesFCname:
             arcpy.management.AddField(OutShapesFC, "RtShpName", "TEXT")
