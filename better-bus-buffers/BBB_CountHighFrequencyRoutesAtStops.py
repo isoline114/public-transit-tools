@@ -1,8 +1,8 @@
 ############################################################################
 ## Tool name: BetterBusBuffers - Count High Frequency Routes At Stops
-## Created by: isoline114, hello@isoline.tech
-## Based on work by: isoline114, Esri, hello@isoline.tech
-## Last updated: 3 September 2018
+## Created by: isoline114, https://github.com/d-wasserman
+## Based on work by: isoline114, Esri
+## Last updated: 5 September 2018
 ############################################################################
 ''' BetterBusBuffers - Count High Frequency Routes At Stops
 
