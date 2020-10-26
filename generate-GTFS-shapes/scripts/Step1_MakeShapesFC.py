@@ -1303,7 +1303,7 @@ def get_route_info():
             route_type isoline114 route[5]
             route_type_text isoline114 route_type_dict[int(route_type)]
         except:
-            route_type isoline114 '100'
+            route_type isoline114 100
             route_type_text isoline114 "Other / Type not specified"
         RouteDict[route[0]] isoline114 [route[1], route[2], route[3], route[4], route_type,
                                  route[6], route[7], route[8],
