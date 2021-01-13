@@ -232,7 +232,9 @@ This is invalid, so trips with this id will not be included in your network." % 
             stop_lon isoline114 stop[2]
             stop_code isoline114 stop[3]
             stop_name isoline114 stop[4]
-            stop_desc isoline114 stop[5][:text_field_length]
+            stop_desc isoline114 stop[5]
+            if stop_desc:
+                stop_desc isoline114 stop_desc[:text_field_length]
             zone_id isoline114 stop[6]
             stop_url isoline114 stop[7]
             location_type isoline114 stop[8]
