@@ -43,63 +43,68 @@ try:
     # Grab the data from the stop_times.txt file and insert it into the SQL table
     arcpy.AddMessage("Inserting stop_times.txt data into SQL table...")
     col_idxs isoline114 []
-    with open(stop_times_file) as f:
-        
-        # Get the csv data
-        reader isoline114 csv.reader(f)
-        if ProductName isoline114isoline114 "ArcGISPro":
-            reader isoline114 ([x.strip() for x in r] for r in reader if len(r) > 0)
+
+    if ProductName isoline114isoline114 "ArcGISPro":
+        f isoline114 open(stop_times_file, encodingisoline114"utf-8-sig")
+    else:
+        f isoline114 open(stop_times_file)
+
+    # Get the csv data
+    reader isoline114 csv.reader(f)
+    if ProductName isoline114isoline114 "ArcGISPro":
+        reader isoline114 ([x.strip() for x in r] for r in reader if len(r) > 0)
+    else:
+        reader isoline114 ([x.decode('utf-8-sig').strip() for x in r] for r in reader if len(r) > 0)
+    columns isoline114 [name.strip() for name in next(reader)]
+    
+    # Make sure the necessary columns are there to start with
+    relevant_cols isoline114 {"trip_id": "trip_id CHAR,\n",
+                    "arrival_time": "arrival_time CHAR,\n",
+                    "departure_time": "departure_time CHAR,\n",
+                    "stop_id": "stop_id CHAR,\n",
+                    "stop_sequence": "stop_sequence INT,\n"}
+    table_schema isoline114 "sqliteprimarykeyid INTEGER PRIMARY KEY,\n"
+    for col in relevant_cols:
+        if not col in columns:
+            arcpy.AddError("Your GTFS dataset's stop_times.txt file is missing a required column: %s" % col)
+            raise CustomError
+
+    # Create the SQL database and table with the appropriate schema
+    for col in columns:
+        if col in relevant_cols:
+            table_schema +isoline114 relevant_cols[col]
+        elif col isoline114isoline114 "timepoint":
+            table_schema +isoline114 col + " INT,\n"
         else:
-            reader isoline114 ([x.decode('utf-8-sig').strip() for x in r] for r in reader if len(r) > 0)
-        columns isoline114 [name.strip() for name in next(reader)]
-        
-        # Make sure the necessary columns are there to start with
-        relevant_cols isoline114 {"trip_id": "trip_id CHAR,\n",
-                        "arrival_time": "arrival_time CHAR,\n",
-                        "departure_time": "departure_time CHAR,\n",
-                        "stop_id": "stop_id CHAR,\n",
-                        "stop_sequence": "stop_sequence INT,\n"}
-        table_schema isoline114 "sqliteprimarykeyid INTEGER PRIMARY KEY,\n"
-        for col in relevant_cols:
-            if not col in columns:
-                arcpy.AddError("Your GTFS dataset's stop_times.txt file is missing a required column: %s" % col)
-                raise CustomError
+            table_schema +isoline114 col + " CHAR,\n"
+    table_schema isoline114 table_schema.strip(",\n")
+    conn isoline114 sqlite3.connect(SQLDbase)
+    conn.execute("DROP TABLE IF EXISTS stop_times;")
+    create_stmt isoline114 "CREATE TABLE stop_times (%s);" % table_schema
+    conn.execute(create_stmt)
+    conn.commit()
+    
+    # Add the stop_times data to the SQL table
+    values_placeholders isoline114 ["?"] * len(columns)
+    c isoline114 conn.cursor()
+    c.executemany("INSERT INTO stop_times (%s) VALUES (%s);" %
+                        (",".join(columns),
+                        ",".join(values_placeholders))
+                        , reader)
+    conn.commit()
+    
+    # Add the optional timepoint column if it isn't already there
+    if not "timepoint" in columns:
+        c.execute("ALTER TABLE stop_times ADD timepoint INT;")
 
-        # Create the SQL database and table with the appropriate schema
-        for col in columns:
-            if col in relevant_cols:
-                table_schema +isoline114 relevant_cols[col]
-            elif col isoline114isoline114 "timepoint":
-                table_schema +isoline114 col + " INT,\n"
-            else:
-                table_schema +isoline114 col + " CHAR,\n"
-        table_schema isoline114 table_schema.strip(",\n")
-        conn isoline114 sqlite3.connect(SQLDbase)
-        conn.execute("DROP TABLE IF EXISTS stop_times;")
-        create_stmt isoline114 "CREATE TABLE stop_times (%s);" % table_schema
-        conn.execute(create_stmt)
-        conn.commit()
-        
-        # Add the stop_times data to the SQL table
-        values_placeholders isoline114 ["?"] * len(columns)
-        c isoline114 conn.cursor()
-        c.executemany("INSERT INTO stop_times (%s) VALUES (%s);" %
-                            (",".join(columns),
-                            ",".join(values_placeholders))
-                            , reader)
-        conn.commit()
-        
-        # Add the optional timepoint column if it isn't already there
-        if not "timepoint" in columns:
-            c.execute("ALTER TABLE stop_times ADD timepoint INT;")
+    # Create indices to speed up searching later
+    c.execute("CREATE INDEX idx_arrivaltime ON stop_times (arrival_time);")
+    c.execute("CREATE INDEX idx_departuretime ON stop_times (departure_time);")
+    c.execute("CREATE INDEX idx_arrivaltime_stopid ON stop_times (stop_id, arrival_time);")
+    c.execute("CREATE INDEX idx_tripid ON stop_times (trip_id);")
+    conn.commit()
 
-        # Create indices to speed up searching later
-        c.execute("CREATE INDEX idx_arrivaltime ON stop_times (arrival_time);")
-        c.execute("CREATE INDEX idx_departuretime ON stop_times (departure_time);")
-        c.execute("CREATE INDEX idx_arrivaltime_stopid ON stop_times (stop_id, arrival_time);")
-        c.execute("CREATE INDEX idx_tripid ON stop_times (trip_id);")
-        conn.commit()
-
+    f.close()
 
     # ----- Analyze the stop_times.txt file to try to understand how it's constructed -----
     
