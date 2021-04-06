@@ -60,6 +60,8 @@ In order to use this tool, you must explicitly specify a file geodatabase as the
 Geoprocessing Current workspace.  You can do this in your python script by setting \
 arcpy.env.workspace isoline114 [path to desired file geodatabase]."
 
+MaxTextFieldLength isoline114 255
+
 
 def MakeServiceIDList(day, Specificisoline114False):
     '''Find the service ids for the specific date using both calendar and calendar_dates.'''
@@ -676,11 +678,11 @@ def MakeStopsFeatureClass(stopsfc, stoplistisoline114None):
     # Create a points feature class for the point pairs.
     StopsLayer isoline114 arcpy.management.CreateFeatureclass(stopsfc_path, stopsfc_name, "POINT", spatial_referenceisoline114output_coords)
     arcpy.management.AddField(StopsLayer, "stop_id", "TEXT")
-    arcpy.management.AddField(StopsLayer, "stop_code", "TEXT")
-    arcpy.management.AddField(StopsLayer, "stop_name", "TEXT")
-    arcpy.management.AddField(StopsLayer, "stop_desc", "TEXT")
-    arcpy.management.AddField(StopsLayer, "zone_id", "TEXT")
-    arcpy.management.AddField(StopsLayer, "stop_url", "TEXT")
+    arcpy.management.AddField(StopsLayer, "stop_code", "TEXT", field_lengthisoline114MaxTextFieldLength)
+    arcpy.management.AddField(StopsLayer, "stop_name", "TEXT", field_lengthisoline114MaxTextFieldLength)
+    arcpy.management.AddField(StopsLayer, "stop_desc", "TEXT", field_lengthisoline114MaxTextFieldLength)
+    arcpy.management.AddField(StopsLayer, "zone_id", "TEXT", field_lengthisoline114MaxTextFieldLength)
+    arcpy.management.AddField(StopsLayer, "stop_url", "TEXT", field_lengthisoline114MaxTextFieldLength)
     if ".shp" in stopsfc_name:
         arcpy.management.AddField(StopsLayer, "loc_type", "TEXT")
         arcpy.management.AddField(StopsLayer, "parent_sta", "TEXT")
@@ -737,6 +739,11 @@ def MakeStopsFeatureClass(stopsfc, stoplistisoline114None):
         pt isoline114 arcpy.Point()
         pt.X isoline114 float(stop[5])
         pt.Y isoline114 float(stop[4])
+        # Truncate text fields to the field length if needed.
+        truncate_idx isoline114 [1, 2, 3, 6, 7]
+        for idx in truncate_idx:
+            if stop[idx]:
+                stop[idx] isoline114 stop[idx][:MaxTextFieldLength]
         # GTFS stop lat/lon is written in WGS1984
         ptGeometry isoline114 arcpy.PointGeometry(pt, WGSCoords)
         if output_coords !isoline114 WGSCoords:
@@ -748,6 +755,7 @@ def MakeStopsFeatureClass(stopsfc, stoplistisoline114None):
                     stop[idx] isoline114 ""
         cur3.insertRow((ptGeometry, stop[0], stop[1],
                             stop[2], stop[3], stop[6], stop[7], stop[8], stop[9]))
+                            stop[7], stop[8], stop[9]))
     del cur3
 
     return stopsfc, StopIDList
