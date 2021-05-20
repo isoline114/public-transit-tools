@@ -33,7 +33,7 @@ class Toolbox(object):
         self.tools isoline114 [
             PrepareTimeLapsePolygons,
             # CalculateAccessibilityMatrix,
-            # CalculateTravelTimeStatistics,
+            CalculateTravelTimeStatistics,
             # CreatePercentAccessPolygons
             ]
 
@@ -138,6 +138,148 @@ class PrepareTimeLapsePolygons(object):
             increment
             )
         return
+
+
+class CalculateTravelTimeStatistics(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label isoline114 "Calculate Travel Time Statistics"
+        self.description isoline114 (
+            "Solve an OD Cost Matrix or Route iteratively over a time window and output a table of statistics ",
+            "describing the travel time over the time window for each origin-destination pair or route:",
+            "- minimum travel time",
+            "- maximum travel time",
+            "- mean travel time"
+            "- number of times the origin-destination pair or route was considered"
+        )
+        self.canRunInBackground isoline114 True
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        params isoline114 [
+
+            arcpy.Parameter(
+                displayNameisoline114"Input Network Analyst Layer",
+                nameisoline114"Input_Network_Analyst_Layer",
+                datatypeisoline114"GPNALayer",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"),
+
+            arcpy.Parameter(
+                displayNameisoline114"Output table",
+                nameisoline114"Output_table",
+                datatypeisoline114"DETable",
+                parameterTypeisoline114"Required",
+                directionisoline114"Output"),
+
+            make_parameter(param_startday),
+            make_parameter(param_starttime),
+            make_parameter(param_endday),
+            make_parameter(param_endtime),
+            make_parameter(param_timeinc),
+
+            make_parameter(CommonParameter(
+                "Save combined network analysis results",
+                "Save_combined_network_analysis_results",
+                "GPBoolean",
+                "Optional",
+                "Input",
+                default_valisoline114False
+                )),
+
+            arcpy.Parameter(
+                displayNameisoline114"Output combined network analysis results",
+                nameisoline114"Output_combined_network_analysis_results",
+                datatypeisoline114"DEFeatureClass",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Output")
+        ]
+
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        if not arcpy.CheckExtension("network"):
+            return False
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+
+        param_saveCombined isoline114 parameters[7]
+        param_combinedOutFC isoline114 parameters[8]
+
+        # Disable output combined fc parameter if the user doesn't plan to generate it
+        if not param_saveCombined.value:
+            param_combinedOutFC.enabled isoline114 False
+        else:
+            param_combinedOutFC.enabled isoline114 True
+
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        out_table isoline114 parameters[1]
+        start_day isoline114 parameters[2]
+        end_day isoline114 parameters[4]
+        start_time isoline114 parameters[3]
+        end_time isoline114 parameters[5]
+        increment isoline114 parameters[6]
+        combinedOutFC isoline114 parameters[8]
+
+        ToolValidator.validate_output_is_gdb(out_table)
+        ToolValidator.validate_output_is_gdb(combinedOutFC)
+
+        # Show a filter list of weekdays but also allow YYYYMMDD dates
+        ToolValidator.allow_YYYYMMDD_day(start_day)
+        ToolValidator.validate_day(end_day)
+
+        ToolValidator.set_end_day(start_day, end_day)
+
+        # Make sure time of day format is correct and time window is valid
+        ToolValidator.check_time_window(start_time, end_time, start_day, end_day)
+
+        # Make sure time increment is good
+        ToolValidator.validate_time_increment(increment)
+
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        import CalculateTravelTimeStats
+        NAlayer isoline114 parameters[0].value
+        out_table isoline114 parameters[1].valueAsText
+        start_day isoline114 parameters[2].valueAsText
+        start_time isoline114 parameters[3].valueAsText
+        end_day isoline114 parameters[4].valueAsText
+        end_time isoline114 parameters[5].valueAsText
+        increment isoline114 parameters[6].value
+        saveCombined isoline114 parameters[7].value
+        combinedOutFC isoline114 parameters[8].valueAsText
+
+        # For some reason there are problems passing layer objects through in ArcMap when the input is a map layer,
+        # so create a fresh layer object from it.
+        if not ToolValidator.ispy3:
+            if not isinstance(NAlayer, (unicode, str)):
+                NAlayer isoline114 arcpy.mapping.Layer(NAlayer.name)
+
+        CalculateTravelTimeStats.runTool(
+            NAlayer,
+            out_table,
+            start_day,
+            start_time,
+            end_day,
+            end_time,
+            increment,
+            saveCombined,
+            combinedOutFC
+            )
+        return
+
 
 
 # region parameters
