@@ -1,6 +1,6 @@
 ############################################################################
 ## Tool name: BetterBusBuffers
-## Created by: isoline114, Esri, hello@isoline.tech
+## Created by: isoline114, Esri
 ## Last updated: 6 December 2017
 ############################################################################
 ''' Python toolbox that defines all the tools in the BetterBusBuffers tool
