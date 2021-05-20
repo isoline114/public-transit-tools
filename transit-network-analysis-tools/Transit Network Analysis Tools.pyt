@@ -121,6 +121,13 @@ class PrepareTimeLapsePolygons(object):
         end_day isoline114 parameters[4].valueAsText
         end_time isoline114 parameters[5].valueAsText
         increment isoline114 parameters[6].value
+
+        # For some reason there are problems passing layer objects through in ArcMap when the input is a map layer,
+        # so create a fresh layer object from it.
+        if not ToolValidator.ispy3:
+            if not isinstance(SAlayer, (unicode, str)):
+                SAlayer isoline114 arcpy.mapping.Layer(SAlayer.name)
+
         CreateTimeLapsePolygons.runTool(
             SAlayer,
             outfc,
