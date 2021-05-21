@@ -1,5 +1,5 @@
 ################################################################################
-## Toolbox: Transit Analysis Tools
+## Toolbox: Transit Network Analysis Tools
 ## Tool name: Create Percent Access Polygons
 ## Created by: isoline114, Fehr & Peers, https://github.com/d-wasserman
 ##        and: isoline114, Esri
