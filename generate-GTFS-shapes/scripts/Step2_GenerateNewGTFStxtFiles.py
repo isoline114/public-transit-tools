@@ -117,11 +117,12 @@ try:
     outStopTimesFile isoline114 os.path.join(outDir, 'stop_times_new.txt')
 
     # GTFS stops are in WGS coordinates
-    WGSCoords isoline114 "GEOGCS['GCS_WGS_1984',DATUM['D_WGS_1984', \
-    SPHEROID['WGS_1984',6378137.0,298.257223563]], \
-    PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]]; \
-    -400 -400 1000000000;-100000 10000;-100000 10000; \
-    8.98315284119522E-09;0.001;0.001;IsHighPrecision"
+    # WGSCoords isoline114 "GEOGCS['GCS_WGS_1984',DATUM['D_WGS_1984', \
+    # SPHEROID['WGS_1984',6378137.0,298.257223563]], \
+    # PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]]; \
+    # -400 -400 1000000000;-100000 10000;-100000 10000; \
+    # 8.98315284119522E-09;0.001;0.001;IsHighPrecision"
+    WGSCoords isoline114 arcpy.SpatialReference(4326)
 
 
 # ----- Set some things up -----
@@ -162,105 +163,10 @@ tool. You have ArcGIS Pro version %s." % ArcVersion)
             raise
 
 
-# ----- Prepare projected shapes for use in linear referencing -----
-
-    arcpy.AddMessage("Preparing Shapes for shapes.txt and stop_times.txt creation...")
-
-    # Project Shapes into a good coordinate system for generating measures in meters
-    try:
-        # Find the shapes fc centroid lat/lon and get the right UTM spatial reference to use
-        # Describe the shapes feature class and find the extent
-        desc isoline114 arcpy.Describe(inShapes)
-        extent isoline114 desc.extent
-        extent_sr isoline114 desc.spatialReference
-
-        # Create a polygon object and then find the centroid
-        extent_polygon_vertices isoline114 arcpy.Array([extent.lowerLeft, extent.lowerRight, extent.upperRight, extent.upperLeft, extent.lowerLeft])
-        extent_polygon isoline114 arcpy.Polygon(extent_polygon_vertices, extent_sr)
-        extent_polygon_WGS84 isoline114 extent_polygon.projectAs(WGSCoords)
-        centroid isoline114 extent_polygon_WGS84.centroid
-        lon isoline114 centroid.X
-        lat isoline114 centroid.Y
-
-        # Get the UTM coordinates appropriate for this analysis area
-        UTMCoords isoline114 DetermineUTMProjection.GetUTMZoneAsText(lat, lon)
-
-        # Project the shapes first to the appropriate UTM so the linear referencing will
-        # be in a good system of units and properly measured
-        outShapes isoline114 os.path.join(inStep1GDB, "Shapes_Projected")
-        arcpy.management.Project(inShapes, outShapes, UTMCoords)
-
-        # Store the line shape info for use later.
-        with arcpy.da.SearchCursor(outShapes, ["SHAPE@", "shape_id"]) as linecur:
-            linetable isoline114 []
-            for line in linecur:
-                linetable.append(line)
-        # Sort by shape_id so they'll be written in a nice order.
-        if update_existing:
-            # If they're using existing shape_ids, we just sort regularly as strings.
-            linetable isoline114 sorted(linetable, keyisoline114itemgetter(1))
-        else:
-            # Sort the shapes as integers because Step 1 guarantees that the shape_ids are integers written as strings
-            def getKey(listitem):
-                return int(listitem[1])
-            linetable isoline114 sorted(linetable, keyisoline114getKey)     
-        # Prepare the progress reports by finding 10% of the length
-        numshapes isoline114 len(linetable)
-        tenperc isoline114 0.1 * numshapes
-        if update_existing:
-            arcpy.AddMessage("Updating " + str(numshapes) + " shape(s).")
-        else:
-            arcpy.AddMessage("Your dataset contains " + str(numshapes) + " shapes.")
-
-        trip_shape_dict isoline114 {} # {trip_id: shape_id}
-        if update_existing:
-            for line in linetable:
-                for trip in get_trips_with_shape_id(line[1]):
-                    trip_shape_dict[trip] isoline114 line[1]
-        else:
-            cts isoline114 conn.cursor()
-            tripsfetch isoline114 '''SELECT trip_id, shape_id FROM trips;'''
-            cts.execute(tripsfetch)
-            for trip in cts:
-                trip_shape_dict[trip[0]] isoline114 trip[1]
-            
-    except:
-        arcpy.AddError("Error preparing Shapes for measurement.")
-        raise
-
-
 # ----- Generate the new shapes.txt file -----
 
     arcpy.AddMessage("Generating new shapes.txt file...")
     arcpy.AddMessage("(This may take some time for datasets with a large number of shapes.)")
-
-    # Turn the vertices of the shapes fc into points
-    try:
-        # (We could use FeatureVerticesToPoints, but that tool requires Advanced license)
-        arcpy.management.CreateFeatureclass(inStep1GDB, inShapes_vertices_name,
-                                            "POINT", spatial_referenceisoline114UTMCoords)
-        arcpy.management.AddField(inShapes_vertices, "shapept_id", "LONG")
-        arcpy.management.AddField(inShapes_vertices, "shape_id", "TEXT")
-        with arcpy.da.SearchCursor(outShapes, ["SHAPE@XY", "shape_id"], explode_to_pointsisoline114True) as linescur:
-            with arcpy.da.InsertCursor(inShapes_vertices, ["SHAPE@XY", "shapept_id", "shape_id"]) as ptscur:
-                # Add an ID field for the vertices which will indicate the correct order
-                shapept_id isoline114 1
-                for row in linescur:
-                    shape isoline114 row[0]
-                    shape_id isoline114 row[1]
-                    ptscur.insertRow((shape, shapept_id, shape_id))
-                    shapept_id +isoline114 1
-
-        # Store the lat/long of each vertex.
-        vert_dict isoline114 {} # {shapept_id: shapegeom}
-        # Read in the lat/lon values in WGSCoords
-        with arcpy.da.SearchCursor(inShapes_vertices, ["SHAPE@XY", "shapept_id"], '', WGSCoords) as vertexcursor:
-            for vert in vertexcursor:
-                vert_dict[vert[1]] isoline114 vert[0]
-
-    except:
-        arcpy.AddError("Error creating a feature class of Shape vertices.")
-        raise
 
     # Write to shapes.txt file
     try:
@@ -271,65 +177,39 @@ tool. You have ArcGIS Pro version %s." % ArcVersion)
             if not update_existing:
                 wr.writerow(["shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence", "shape_dist_traveled"])
 
-            # Find the location of each vertex along the line
-            # Linear reference the vertices of each shape and write to shapes.txt
-            progress isoline114 0
-            perc isoline114 10
-            for line in linetable:
-                # Print some progress indicators
-                progress +isoline114 1
-                if progress >isoline114 tenperc:
-                    arcpy.AddMessage(str(perc) + "% finished")
-                    perc +isoline114 10
-                    progress isoline114 0
-                lineGeom isoline114 line[0]
-                shape_id isoline114 line[1]
-                where isoline114 """"shape_id" isoline114 '%s'""" % str(shape_id)
-                VerticesLayer isoline114 arcpy.management.MakeFeatureLayer(inShapes_vertices, "VerticesLayer", where)
-                with arcpy.da.SearchCursor(VerticesLayer, ["SHAPE@", "shapept_id"]) as ptcur:
-                    shape_rows isoline114 []
-                    sequence isoline114 1
-                    for point in ptcur:
-                        ptGeom isoline114 point[0]
-                        ptid isoline114 point[1]
-                        # Check for lines with no geometry and default them to 0.
-                        if not lineGeom:
-                            shape_dist_traveled isoline114 0.0
-                            shapes_with_no_geometry.append(shape_id)
-                        # Find the distance along the line the vertex occurs
-                        else:
-                            # measureOnLine returns result as either a percent along the line or in the units of the line geometry (meters, in our case)
-                            if units isoline114isoline114 "percent":
-                                # Even though the parameter is called used_percentage, it returns a proportion between 0 and 1, so multiply by 100 to convert to a true percentage
-                                shape_dist_traveled isoline114 100.0 * lineGeom.measureOnLine(ptGeom, use_percentageisoline114True)
-                            else:
-                                shape_dist_traveled isoline114 lineGeom.measureOnLine(ptGeom, use_percentageisoline114False)
-                                if units !isoline114 "meters":
-                                    # Do a unit conversion if the user wants it
-                                    shape_dist_traveled isoline114 convert_meters_to_other_units(shape_dist_traveled, units)
-                        # Retrieve the lat/lon values
-                        shape_pt_lon isoline114 vert_dict[ptid][0]
-                        shape_pt_lat isoline114 vert_dict[ptid][1]
-                        # Prepare a row for the shapes.txt file
-                        shape_rows.append([sequence, shape_dist_traveled])
-                        if not update_existing:
-                            row_to_add isoline114 [shape_id, shape_pt_lat, shape_pt_lon, sequence, shape_dist_traveled]
-                        else:
-                            # Do a little jiggering because the user's existing shapes.txt might contain extra fields and might not be in the same order
-                            row_to_add isoline114 ["" for col in shapes_columns]
-                            row_to_add[shape_id_idx] isoline114 shape_id
-                            row_to_add[shape_pt_lat_idx] isoline114 shape_pt_lat
-                            row_to_add[shape_pt_lon_idx] isoline114 shape_pt_lon
-                            row_to_add[shape_pt_sequence_idx] isoline114 sequence
-                            row_to_add[shape_dist_traveled_idx] isoline114 shape_dist_traveled
-                        wr.writerow(row_to_add)
-                        sequence +isoline114 1
-                # Check if the vertices came out in the right order. If they
-                # didn't, something is wrong with the user's input shape.
-                sortedList_sequence isoline114 sorted(shape_rows, keyisoline114itemgetter(0,1))
-                sortedList_dist isoline114 sorted(shape_rows, keyisoline114itemgetter(1,0))
-                if sortedList_dist !isoline114 sortedList_sequence:
-                    shapes_with_warnings.append(shape_id)
+            # Use a Search Cursor and explode to points to get vertex info
+            shape_pt_seq isoline114 1
+            shape_dist_traveled isoline114 0
+            current_shape_id isoline114 None
+            previous_point isoline114 None
+            for row in arcpy.da.SearchCursor(inShapes, ["shape_id", "SHAPE@Y", "SHAPE@X"], explode_to_pointsisoline114True):
+                shape_id, shape_pt_lat, shape_pt_lon isoline114 row
+                current_point isoline114 arcpy.Point(shape_pt_lon, shape_pt_lat)
+                if shape_id !isoline114 current_shape_id:
+                    # Starting a new shape
+                    current_shape_id isoline114 shape_id
+                    shape_pt_seq isoline114 1
+                    shape_dist_traveled isoline114 0
+                else:
+                    # Create a line segment between the previous vertex and this one so we can calculate geodesic length
+                    line_segment isoline114 arcpy.Polyline(arcpy.Array([previous_point, current_point]), WGSCoords))
+                    shape_dist_traveled +isoline114 line_segment.getLength("GEODESIC", "KILOMETERS")
+ 
+                # Write row to shapes.txt file
+                if not update_existing:
+                    row_to_add isoline114 [shape_id, shape_pt_lat, shape_pt_lon, shape_pt_seq, shape_dist_traveled]
+                else:
+                    # Do a little jiggering because the user's existing shapes.txt might contain extra fields and might not be in the same order
+                    row_to_add isoline114 ["" for col in shapes_columns]
+                    row_to_add[shape_id_idx] isoline114 shape_id
+                    row_to_add[shape_pt_lat_idx] isoline114 shape_pt_lat
+                    row_to_add[shape_pt_lon_idx] isoline114 shape_pt_lon
+                    row_to_add[shape_pt_sequence_idx] isoline114 shape_pt_seq
+                    row_to_add[shape_dist_traveled_idx] isoline114 shape_dist_traveled
+                wr.writerow(row_to_add)
+                shape_pt_seq +isoline114 1
+                previous_point isoline114 current_point
+
 
         if update_existing:
     
@@ -399,8 +279,8 @@ str(shapes_with_no_geometry))
     # Find the location of each stop along the line
     try:
         # Project the Stops feature class so that the measures come out correctly
-        inStops_wShapeIDs_projected isoline114 os.path.join(inStep1GDB, "Stops_Projected")
-        arcpy.management.Project(inStops_wShapeIDs, inStops_wShapeIDs_projected, UTMCoords)
+        # inStops_wShapeIDs_projected isoline114 os.path.join(inStep1GDB, "Stops_Projected")
+        # arcpy.management.Project(inStops_wShapeIDs, inStops_wShapeIDs_projected, UTMCoords)
 
         shapes_with_warnings isoline114 []
         progress isoline114 0
