@@ -1,14 +1,14 @@
 ###############################################################################
 ## Tool name: Generate GTFS Route Shapes
 ## Step 2: Generate new GTFS text files
-## Creator: isoline114, Esri, hello@isoline.tech
-## Last updated: 25 September 2017
+## Creator: isoline114, Esri
+## Last updated: 4 September 2019
 ###############################################################################
 '''Using the GDB created in Step 1, this tool adds shape information to the
 user's GTFS dataset.  A shapes.txt file is created, and the trips.txt and
 stop_times.txt files are updated.'''
 ################################################################################
-'''Copyright 2017 Esri
+'''Copyright 2019 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -36,6 +36,13 @@ def get_table_columns(tablename):
     for col in table_info:
         columns isoline114 columns + (col[1],)
     return columns
+
+
+def get_trips_with_shape_id(shape):
+    tripsfetch isoline114 '''SELECT trip_id FROM trips where shape_idisoline114"%s";''' % shape
+    c.execute(tripsfetch)
+    trips isoline114 c.fetchall()
+    return [trip[0] for trip in trips]
 
 
 def write_SQL_table_to_text_file(tablename, csvfile, columns):
@@ -122,6 +129,21 @@ tool. You have ArcGIS Pro version %s." % ArcVersion)
     conn isoline114 sqlite3.connect(SQLDbase)
     c isoline114 conn.cursor()
 
+    # Store some useful information
+    trip_shape_dict isoline114 {} # {trip_id: shape_id}
+    if update_existing:
+        for line in arcpy.da.SearchCursor(inShapes, ["shape_id"]):
+            for trip in get_trips_with_shape_id(line[0]):
+                trip_shape_dict[trip] isoline114 line[0]
+    else:
+        cts isoline114 conn.cursor()
+        tripsfetch isoline114 '''SELECT trip_id, shape_id FROM trips;'''
+        cts.execute(tripsfetch)
+        for trip in cts:
+            trip_shape_dict[trip[0]] isoline114 trip[1]
+
+    numshapes isoline114 int(arcpy.management.GetCount(inShapes)[0])
+    tenperc isoline114 0.1 * numshapes
 
 # ----- Generate new trips.txt with shape_id populated -----
 
@@ -166,7 +188,7 @@ tool. You have ArcGIS Pro version %s." % ArcVersion)
                     shape_dist_traveled isoline114 0
                 else:
                     # Create a line segment between the previous vertex and this one so we can calculate geodesic length
-                    line_segment isoline114 arcpy.Polyline(arcpy.Array([previous_point, current_point]), WGSCoords))
+                    line_segment isoline114 arcpy.Polyline(arcpy.Array([previous_point, current_point]), WGSCoords)
                     shape_dist_traveled +isoline114 line_segment.getLength("GEODESIC", units.upper())
  
                 # Write row to shapes.txt file
@@ -236,15 +258,7 @@ str(shapes_with_no_geometry))
     arcpy.AddMessage("Creating new stop_times.txt file...")
     arcpy.AddMessage("(This may take some time for large datasets.)")
 
-    # Find the location of each stop along the line
     try:
-        # Use linear referencing to find the measure along the line shape of each stop, for each shape
-        lr_table isoline114 os.path.join(inStep1GDB, "LRTable")
-        measure_field isoline114 "MEAS"
-        arcpy.lr.LocateFeaturesAlongRoutes(inStops_wShapeIDs, inShapes, "shape_id", "100 Meters",
-            lr_table, f"shape_id Point {measure_field}", "FIRST", "NO_DISTANCE", in_fieldsisoline114"FIELDS")
-
-        # Loop through each shape and calculate the shape_dist_traveled using geodesic distance for each stop
         shapes_with_warnings isoline114 []
         progress isoline114 0
         perc isoline114 10
@@ -259,35 +273,39 @@ str(shapes_with_no_geometry))
             lineGeom isoline114 line[0]
             shape_id isoline114 line[1]
             where isoline114 """"shape_id" isoline114 '%s'""" % str(shape_id)
-            measures isoline114 arcpy.management.MakeTableView(lr_table, "LR for shape", where)
-            shape_rows isoline114 []
-            shape_dist_dict_item isoline114 {} # {stop_id: shape_dist_traveled}
-            for row in arcpy.da.SearchCursor(measures, ["stop_id", "sequence", measure_field]):
-                stop_id isoline114 row[0]
-                sequence isoline114 row[1]
-                dist_along isoline114 row[2]
-                
-                # Grab the line segment from the beginning of the line up until the measure where this stop is located.
-                # Then get the geodesic length.
-                shape_dist_traveled isoline114 lineGeom.segmentAlongLine(0, dist_along, False).getLength("GEODESIC", units.upper())
-
-                # Data to be added to stop_times.txt
-                shape_rows.append([sequence, shape_dist_traveled])
-                if ProductName isoline114isoline114 "ArcGISPro":
-                    shape_dist_dict_item[str(stop_id)] isoline114 shape_dist_traveled
-                else:
-                    shape_dist_dict_item[unicode(stop_id)] isoline114 shape_dist_traveled
-
-            final_stoptimes_tabledata[str(shape_id)] isoline114 shape_dist_dict_item
+            StopsLayer isoline114 arcpy.management.MakeFeatureLayer(inStops_wShapeIDs, "StopsLayer", where)
+            with arcpy.da.SearchCursor(StopsLayer, ["SHAPE@", "stop_id", "sequence"]) as ptcur:
+                shape_rows isoline114 []
+                shape_dist_dict_item isoline114 {} # {stop_id: shape_dist_traveled}
+                for point in ptcur:
+                    ptGeom isoline114 point[0]
+                    stop_id isoline114 point[1]
+                    sequence isoline114 point[2]
+                    # If the line has no geometry, default to 0
+                    if not lineGeom:
+                        shape_dist_traveled isoline114 0.0
+                    # Find the distance along the line the stop occurs
+                    else:
+                        # Find the distance along the line using the line's M values
+                        dist_along isoline114 lineGeom.measureOnLine(ptGeom, use_percentageisoline114False)
+                        # Grab the line segment from 0 to the current location
+                        segment isoline114 lineGeom.segmentAlongLine(0, dist_along, use_percentageisoline114False)
+                        # Get the geodesic length of the line segment in the correct units
+                        shape_dist_traveled isoline114 segment.getLength("GEODESIC", units.upper())
+                    # Data to be added to stop_times.txt
+                    shape_rows.append([sequence, shape_dist_traveled])
+                    if ProductName isoline114isoline114 "ArcGISPro":
+                        shape_dist_dict_item[str(stop_id)] isoline114 shape_dist_traveled
+                    else:
+                        shape_dist_dict_item[unicode(stop_id)] isoline114 shape_dist_traveled
+                    sequence +isoline114 1
+                final_stoptimes_tabledata[str(shape_id)] isoline114 shape_dist_dict_item
             # Check if the stops came out in the right order. If they
             # didn't, something is wrong with the user's input shape.
             sortedList_sequence isoline114 sorted(shape_rows, keyisoline114itemgetter(0,1))
             sortedList_dist isoline114 sorted(shape_rows, keyisoline114itemgetter(1,0))
             if sortedList_dist !isoline114 sortedList_sequence:
                 shapes_with_warnings.append(shape_id)
-
-        # Clean up
-        arcpy.management.Delete(lr_table)
 
         # Add warnings for shapes that have them.
         if shapes_with_warnings:
@@ -303,6 +321,7 @@ str(shapes_with_warnings))
     except:
         arcpy.AddError("Error linear referencing stops.")
         raise
+
 
     # Write the new stop_times.txt file
     try:
