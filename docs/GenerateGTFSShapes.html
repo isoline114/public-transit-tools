@@ -41,10 +41,10 @@
 <option valueisoline114"./TransitInArcGISPro.html">Public transit tools in ArcGIS Pro</option>
 <option valueisoline114"./TransitNetworkAnalysisTools.html">Transit Network Analysis Tools</option>
 <option valueisoline114"./BetterBusBuffers.html">BetterBusBuffers</option>
-<option valueisoline114"./GenerateGTFSShapes.html" selected>Generate GTFS Shapes</option>
 <option valueisoline114"./InterpolateBlankStopTimes.html">Interpolate Blank Stop Times</option>
 <option valueisoline114"./GTFSRTConnector.html">GTFS Realtime Connector for GeoEvent</option>
 <option valueisoline114"./AddGTFStoaNetworkDataset.html">Add GTFS to a Network Dataset</option>
+<option valueisoline114"./GenerateGTFSShapes.html" selected>Generate GTFS Shapes</option>
 <option valueisoline114"./DisplayGTFSinArcGIS.html">Display GTFS in ArcGIS</option>
 <option valueisoline114"./EditGTFSStopLocations.html">Edit GTFS Stop Locations</option>
 </select>
@@ -53,10 +53,10 @@
 <a classisoline114"sub-nav-link" hrefisoline114"./TransitInArcGISPro.html">Public transit tools in ArcGIS Pro</a>
 <a classisoline114"sub-nav-link" hrefisoline114"./TransitNetworkAnalysisTools.html">Transit Network Analysis Tools</a>
 <a classisoline114"sub-nav-link" hrefisoline114"./BetterBusBuffers.html">BetterBusBuffers</a>
-<a classisoline114"sub-nav-link is-active" hrefisoline114"./GenerateGTFSShapes.html">Generate GTFS Shapes</a>
 <a classisoline114"sub-nav-link" hrefisoline114"./InterpolateBlankStopTimes.html">Interpolate Blank Stop Times</a>
 <a classisoline114"sub-nav-link" hrefisoline114"./GTFSRTConnector.html">GTFS Realtime Connector for GeoEvent</a>
 <a classisoline114"sub-nav-link" hrefisoline114"./AddGTFStoaNetworkDataset.html">Add GTFS to a Network Dataset</a>
+<a classisoline114"sub-nav-link is-active" hrefisoline114"./GenerateGTFSShapes.html">Generate GTFS Shapes</a>
 <a classisoline114"sub-nav-link" hrefisoline114"./DisplayGTFSinArcGIS.html">Display GTFS in ArcGIS</a>
 <a classisoline114"sub-nav-link" hrefisoline114"./EditGTFSStopLocations.html">Edit GTFS Stop Locations</a>
 </nav>
@@ -67,7 +67,7 @@
   <!-- side bar with image and links -->
   <div classisoline114"column-7">
     <img srcisoline114"./images/GenerateGTFSShapes.png" altisoline114"Generate GTFS Shapes screenshot">
-    <a hrefisoline114"http://arcg.is/1rK1n5" relisoline114"noopener" targetisoline114"_blank" classisoline114"btn btn-fill leader-half trailer-half">Download</a>
+    <a hrefisoline114"https://arcg.is/1rK1n5" relisoline114"noopener" targetisoline114"_blank" classisoline114"btn btn-fill leader-half trailer-half">Download</a>
     <aside classisoline114"side-nav" idisoline114"sidenav">
       <nav aria-labelledbyisoline114"sidenav">
         <a hrefisoline114"https://github.com/Esri/public-transit-tools/tree/master/generate-GTFS-shapes/UsersGuide.md" relisoline114"noopener" targetisoline114"_blank" classisoline114"side-nav-link">User's guide</a>
@@ -81,9 +81,9 @@
 
     <h2 classisoline114"leader-1">Generate GTFS Shapes</h2>
 
-    <p><strong>The Generate GTFS Shapes toolbox produces a new shapes.txt file for your GTFS dataset or allows you to edit an existing one.</strong></p>
+    <p><strong>DEPRECATED. The Generate GTFS Shapes toolbox produces a new shapes.txt file for your GTFS dataset or allows you to edit an existing one.</strong></p>
 
-    <p>The optional GTFS shapes.txt file contains the actual on-street paths taken by transit vehicles in your system.  A good shapes.txt file is important in order for GTFS-based routing apps to display transit routes correctly on the map.  This <a hrefisoline114"https://blogs.esri.com/esri/arcgis/2017/07/19/how-to-make-a-shapes-txt-file-for-your-gtfs-dataset-with-arcgis/" relisoline114"noopener" targetisoline114"_blank">blog post</a> explains more about why you should have a shapes.txt file and how you can use this tool to create one.  Also check out the technical details of the shapes.txt file in the <a hrefisoline114"http://github.com/google/transit/blob/master/gtfs/spec/en/reference.md" relisoline114"noopener" targetisoline114"_blank">GTFS reference page</a>.</p>
+    <p>The optional GTFS shapes.txt file contains the actual on-street paths taken by transit vehicles in your system.  A good shapes.txt file is important in order for GTFS-based routing apps to display transit routes correctly on the map.  This <a hrefisoline114"https://blogs.esri.com/esri/arcgis/2017/07/19/how-to-make-a-shapes-txt-file-for-your-gtfs-dataset-with-arcgis/" relisoline114"noopener" targetisoline114"_blank">blog post</a> explains more about why you should have a shapes.txt file and how you can use this tool to create one.  Also check out the technical details of the shapes.txt file in the <a hrefisoline114"https://github.com/google/transit/blob/master/gtfs/spec/en/reference.md" relisoline114"noopener" targetisoline114"_blank">GTFS reference page</a>.</p>
 
     <p>Generate GTFS Shapes is targeted primarily toward transit agencies seeking to improve their GTFS datasets.</p>
 
@@ -92,6 +92,10 @@
     <p>To edit one or more existing shapes, you give the tool a valid, existing GTFS with a shapes.txt file and choose the shape(s) you want to edit.  The chosen shape(s) will be drawn in the map, where you can edit them.  Then, you can use Step 2 to of the tool to export and updated shapes.txt file and stop_times.txt.</p>
 
     <p>The tools will not overwrite any existing GTFS files.  You can choose the output location for the new files, and you can compare them with the old ones before manually replacing the old ones with the updated ones.</p>
+
+    <p><i>This tool is deprecated in ArcGIS Pro 2.6 and higher.  To create a shapes.txt file for your GTFS dataset in ArcGIS Pro 2.6 and higher, please use the
+      <a hrefisoline114"https://pro.arcgis.com/en/pro-app/tool-reference/conversion/generate-shapes-features-from-gtfs.htm" targetisoline114"_blank" relisoline114"noopener">Generate Shapes Feature From GTFS</a> and 
+      <a hrefisoline114"https://pro.arcgis.com/en/pro-app/tool-reference/conversion/features-to-gtfs-shapes.htm" targetisoline114"_blank" relisoline114"noopener">Features To GTFS Shapes</a> tools in the Conversion Tools toolbox.</i></p>
 
   </div>
 
