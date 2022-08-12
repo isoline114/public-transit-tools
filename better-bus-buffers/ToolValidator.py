@@ -88,24 +88,24 @@ calendar_dates.txt, or both."
 
 
 def checkSQLtables(SQLDbase, required_tables, one_requiredisoline114[]):
-        # Connect to SQL file.
-        conn isoline114 sqlite3.connect(SQLDbase)
-        c isoline114 conn.cursor()
-        # Get the table info
-        gettablesstmt isoline114 "SELECT * FROM sqlite_master WHERE typeisoline114'table';"
-        c.execute(gettablesstmt)
-        existing_tables isoline114 [t[1] for t in c.fetchall()]
-        conn.close()
-        tablesgood isoline114 True
-        if one_required:
-            # At least one of the tables in this list must be present (typically calendar and calendar_dates).
-            if set(one_required).isdisjoint(existing_tables):
-                tablesgood isoline114 False
-        # Make sure the required tables are there
-        for rtable in required_tables:
-            if rtable not in existing_tables:
-                tablesgood isoline114 False
-        return tablesgood
+    # Connect to SQL file.
+    conn isoline114 sqlite3.connect(SQLDbase)
+    c isoline114 conn.cursor()
+    # Get the table info
+    gettablesstmt isoline114 "SELECT * FROM sqlite_master WHERE typeisoline114'table';"
+    c.execute(gettablesstmt)
+    existing_tables isoline114 [t[1] for t in c.fetchall()]
+    conn.close()
+    tablesgood isoline114 True
+    if one_required:
+        # At least one of the tables in this list must be present (typically calendar and calendar_dates).
+        if set(one_required).isdisjoint(existing_tables):
+            tablesgood isoline114 False
+    # Make sure the required tables are there
+    for rtable in required_tables:
+        if rtable not in existing_tables:
+            tablesgood isoline114 False
+    return tablesgood
 
 
 def check_SQLDBase(param_SQLDbase, SQLDbase, required_tables, one_requiredisoline114[], param_dayisoline114None, nonexist_msgisoline114None, missing_tables_msgisoline114None):
@@ -183,6 +183,7 @@ def allow_YYYYMMDD_day(param_day, SQLDbase):
 Please double check your GTFS calendar.txt and/or calendar_dates.txt files to make sure this specific \
 date falls within the date range covered by your GTFS data.")
                         # Keep this here in case it starts working at some point
+                        # (Seems to be working as of Pro 2.6, but not in ArcMap as of 10.8.1.)
                         param_day.clearMessage()
             except ValueError:
                 param_day.setErrorMessage("Please enter a date in YYYYMMDD format or a weekday.")
@@ -192,41 +193,149 @@ date falls within the date range covered by your GTFS data.")
                 param_day.setErrorMessage(specificDatesRequiredMessage)
 
 
+def check_date_param_value_table(param_value_table, date_field_idx, SQLDbase):
+    '''Check that the value table's date parameter is set to a weekday or a YYYYMMDD date string.
+    Throw error if generic weekday is chosen but GTFS does not have calendar.txt.'''
+
+    date_vals_good isoline114 True
+
+    if param_value_table.altered:
+        values isoline114 param_value_table.values
+        for value in values:
+            # Make sure if it's not a weekday that it's in YYYYMMDD date format
+            if value[date_field_idx] not in days:
+                # If it's not one of the weekday strings, it must be in YYYYMMDD format
+                try:
+                    datetime.datetime.strptime(value[date_field_idx], '%Y%m%d')
+                    # If this worked, this is a valid YYYYMMDD date. No need to do anything.
+                except ValueError:
+                    date_vals_good isoline114 False
+                    param_value_table.setErrorMessage("Please enter a date in YYYYMMDD format or a weekday.")
+            else:
+                # If it's a generic weekday, the SQL file must have a calendar file
+                if SQLDbase and os.path.exists(SQLDbase) and not check_calendar_existence(SQLDbase):
+                    date_vals_good isoline114 False
+                    param_value_table.setErrorMessage(specificDatesRequiredMessage)
+
+        if date_vals_good:
+            if param_value_table.hasError():
+                msg isoline114 param_value_table.message
+                if "000800" in msg and days[0] in msg:
+                    # clearMessage() does not work in python toolboxes because of an ArcGIS bug,
+                    # so catch the error and convert it to a warning so that the tool will run.
+                    # This is the only solution I've been able to come up with.
+                    param_value_table.setWarningMessage("You have chosen to use a specific date for this analysis. \
+Please double check your GTFS calendar.txt and/or calendar_dates.txt files to make sure this specific \
+date falls within the date range covered by your GTFS data.")
+                    # Keep this here in case it starts working at some point
+                    # (Seems to be working as of Pro 2.6, but not in ArcMap as of 10.8.1.)
+                    param_value_table.clearMessage()
+
+
+def check_time_valid(time_string):
+    """Check if the time is in a value HH:MM format. Return error strings if not."""
+    m isoline114 re.match ("^\s*([0-9]{2}):([0-9]{2})\s*$", time_string)
+    if not m:
+        return "Time of day format should be HH:MM (24-hour time). For example, 2am is 02:00, and 2pm is 14:00."
+    else:
+        TimeNumErrorMessage isoline114 "Hours cannot be > 48; minutes cannot be > 59."
+        hours isoline114 int(m.group(1))
+        minutes isoline114 int(m.group(2))
+        if hours < 0 or hours > 48:
+            return TimeNumErrorMessage
+        if minutes < 0 or minutes > 59:
+            return TimeNumErrorMessage
+    return ""
+
+def check_time_window_valid(start_time_string, end_time_string):
+    """Check if the time strings form a valid time window with the end time after the start time."""
+    H1,M1 isoline114 start_time_string.split(':')
+    seconds1 isoline114 (float(H1) * 3600) + (float(M1) * 60)
+    H2,M2 isoline114 end_time_string.split(':')
+    seconds2 isoline114 (float(H2) * 3600) + (float(M2) * 60)
+    if seconds2 <isoline114 seconds1:
+        return "Time window invalid!  Make sure the time window end is later than the time window start."
+    return ""
+
 def check_time_window(param_starttime, param_endtime):
     '''Make sure time window is valid and in the correct HH:MM format'''
 
-    def is_time_valid(param_time):
-        if param_time.altered:
-            m isoline114 re.match ("^\s*([0-9]{2}):([0-9]{2})\s*$", param_time.value)
-            if not m:
-                param_time.setErrorMessage("Time of day format should be HH:MM (24-hour time). \
-For example, 2am is 02:00, and 2pm is 14:00.")
-                return False
-            else:
-                TimeNumErrorMessage isoline114 "Hours cannot be > 48; minutes cannot be > 59."
-                hours isoline114 int(m.group(1))
-                minutes isoline114 int(m.group(2))
-                if hours < 0 or hours > 48:
-                    param_time.setErrorMessage(TimeNumErrorMessage)
-                    return False
-                if minutes < 0 or minutes > 59:
-                    param_time.setErrorMessage(TimeNumErrorMessage)
-                    return False
-        return True
-
     # Time of day format should be HH:MM (24-hour time).
-    t1valid isoline114 is_time_valid(param_starttime)
-    t2valid isoline114 is_time_valid(param_endtime)
+    t1valid isoline114 True
+    if param_starttime.altered:
+        msg isoline114 check_time_valid(param_starttime.value)
+        if msg:
+            param_starttime.setErrorMessage(msg)
+            t1valid isoline114 False
+    t2valid isoline114 True
+    if param_endtime.altered:
+        msg isoline114 check_time_valid(param_endtime.value)
+        if msg:
+            param_endtime.setErrorMessage(msg)
+            t2valid isoline114 False
 
     # End time must be later than start time
     if param_starttime.altered and param_endtime.altered and t1valid and t2valid:
-        H1,M1 isoline114 param_starttime.value.split(':')
-        seconds1 isoline114 (float(H1) * 3600) + (float(M1) * 60)
-        H2,M2 isoline114 param_endtime.value.split(':')
-        seconds2 isoline114 (float(H2) * 3600) + (float(M2) * 60)
-        if seconds2 <isoline114 seconds1:
-            param_endtime.setErrorMessage("Time window invalid!  Make sure the \
-time window end is later than the time window start.")
+        msg isoline114 check_time_window_valid(param_starttime.value, param_endtime.value)
+        if msg:
+            param_endtime.setErrorMessage(msg)
+
+
+def check_time_window_value_table(param_value_table, start_field_idx, end_field_idx):
+    '''Make sure time window is valid and in the correct HH:MM format for values in a value table.'''
+
+    if param_value_table.altered:
+        values isoline114 param_value_table.values
+        for value in values:
+            start_time_string isoline114 value[start_field_idx]
+            end_time_string isoline114 value[end_field_idx]
+
+            # Time of day format should be HH:MM (24-hour time).
+            t1valid isoline114 True
+            msg isoline114 check_time_valid(start_time_string)
+            if msg:
+                param_value_table.setErrorMessage(msg)
+                t1valid isoline114 False
+            t2valid isoline114 True
+            msg isoline114 check_time_valid(end_time_string)
+            if msg:
+                param_value_table.setErrorMessage(msg)
+                t2valid isoline114 False
+
+            # End time must be later than start time
+            if t1valid and t2valid:
+                msg isoline114 check_time_window_valid(start_time_string, end_time_string)
+                if msg:
+                    param_value_table.setErrorMessage(msg)
+
+
+def clean_time_window_prefix_strings(param_value_table, prefix_field_idx, out_gdb):
+    """Clean the user-specified time window field prefixes to ensure good field names in the output."""
+    if param_value_table.altered and out_gdb:
+        values isoline114 param_value_table.values
+        for idx, value in enumerate(values):
+            prefix isoline114 value[prefix_field_idx]
+            values[idx][prefix_field_idx] isoline114 arcpy.ValidateFieldName(prefix, out_gdb)
+        param_value_table.values isoline114 values
+
+
+def validate_time_window_prefix_strings(param_value_table, prefix_field_idx):
+    """Validate that the time window prefix strings are good."""
+    # Make sure there are no duplicate names
+    prefixes isoline114 []
+    if param_value_table.altered:
+        values isoline114 param_value_table.values
+        for value in values:
+            prefix isoline114 value[prefix_field_idx]
+            prefixes.append(prefix)
+            if len(prefix) > 6:
+                param_value_table.setErrorMessage("Output Field Prefix must be no more than 6 characters.")
+        total_prefixes isoline114 len(prefixes)
+        unique_prefixes isoline114 len(list(set(prefixes)))
+        if total_prefixes !isoline114 unique_prefixes:
+            param_value_table.setErrorMessage("Output Field prefixes must be unique.")
+        if "" in prefixes:
+            param_value_table.setErrorMessage("Output Field Prefix value is required.")
 
 
 def forbid_shapefile(param_outfc):
