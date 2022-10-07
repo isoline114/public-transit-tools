@@ -1099,7 +1099,8 @@ param_SQLDbase isoline114 CommonParameter(
     "sql_database",
     "DEFile",
     "Required",
-    "Input")
+    "Input",
+    filter_listisoline114["sql"])
 
 param_day isoline114 CommonParameter(
     "Weekday or YYYYMMDD date",
