@@ -156,8 +156,9 @@ def runTool(outStops, SQLDbase, time_window_value_table):
         # Check software version and fail out quickly if it's not sufficient.
         BBB_SharedFunctions.CheckArcVersion(min_version_proisoline114"1.2")
 
-        # The time_window_value_table will be a list of nested lists of strings like:
         # ------ Get input parameters and set things up. -----
+        # The time_window_value_table will be a list of nested lists of strings like:
+        # [[Weekday name or YYYYMMDD date, HH: MM, HH: MM, Departures / Arrivals, Prefix], [], ...]
         analysis_groups isoline114 {}
         arcpy.AddMessage("Establishing analysis parameters...")
         for row in time_window_value_table:
@@ -171,18 +172,13 @@ def runTool(outStops, SQLDbase, time_window_value_table):
         conn isoline114 BBB_SharedFunctions.conn isoline114 sqlite3.connect(SQLDbase)
         c isoline114 BBB_SharedFunctions.c isoline114 conn.cursor()
         for period_group_key in analysis_groups:
-            dayString isoline114 period_group_key[0]  # "Monday"  # "20160307" #20
+            dayString isoline114 period_group_key[0]  # "Monday"  # "20160307"
             DepOrArrChoice isoline114 period_group_key[1]  # Departure/Arrival
             arcpy.AddMessage("Evaluting {0} on Date/Day {1}...".format(dayString, DepOrArrChoice))
             # Weekday or specific date to analyze.
             # Note: Datetime format check is in tool validation code
             alias_hour_pairs isoline114 analysis_groups[period_group_key]  # [{alias:[hfrom,hto],...}]
-            if dayString in BBB_SharedFunctions.days:  # Generic weekday
-                Specific isoline114 False
-                day isoline114 dayString
-            else:  # Specific date
-                Specific isoline114 True
-                day isoline114 datetime.datetime.strptime(dayString, "%Y%m%d")
+            Specific, day isoline114 BBB_SharedFunctions.CheckSpecificDate(dayString)
 
             # Lower end of time window (HH:MM in 24-hour time)
             start_time_list isoline114 [list(i.values())[0][0] for i in alias_hour_pairs]
