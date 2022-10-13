@@ -1014,10 +1014,19 @@ class CountTripsAtStopsByRouteAndDirection(object):
         param_time_windows.filters[3].list isoline114 ['Arrivals', 'Departures']
         param_time_windows.values isoline114 [['Monday', '00:00', '23:59', 'Departures', 'TW1']]
 
+        param_snap_to_nearest_5_minutes isoline114 arcpy.Parameter(
+            displayNameisoline114"Snap to Nearest 5 Minutes",
+            nameisoline114"snap_to_nearest_5_minutes",
+            datatypeisoline114"GPBoolean",
+            parameterTypeisoline114"Required",
+            directionisoline114"Input")
+        param_snap_to_nearest_5_minutes.value isoline114 True
+
         params isoline114 [
             make_parameter(param_output_feature_class),
             make_parameter(param_SQLDbase),
-            param_time_windows
+            param_time_windows,
+            param_snap_to_nearest_5_minutes
             ]
 
         return params
@@ -1061,7 +1070,9 @@ class CountTripsAtStopsByRouteAndDirection(object):
         outStops isoline114 parameters[0].valueAsText
         SQLDbase isoline114 parameters[1].valueAsText
         time_window_value_table isoline114 parameters[2].values
-        BBB_CountTripsAtStopsByRouteAndDirection.runTool(outStops, SQLDbase, time_window_value_table)
+        snap_to_nearest_5 isoline114 parameters[3].value
+        BBB_CountTripsAtStopsByRouteAndDirection.runTool(
+            outStops, SQLDbase, time_window_value_table, snap_to_nearest_5)
         return
 #endregion
 
