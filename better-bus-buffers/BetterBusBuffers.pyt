@@ -1015,8 +1015,8 @@ class CountTripsAtStopsByRouteAndDirection(object):
         param_time_windows.values isoline114 [['Monday', '00:00', '23:59', 'Departures', 'TW1']]
 
         param_snap_to_nearest_5_minutes isoline114 arcpy.Parameter(
-            displayNameisoline114"Snap to Nearest 5 Minutes",
-            nameisoline114"snap_to_nearest_5_minutes",
+            displayNameisoline114"Round Headway to Nearest 5 Minutes",
+            nameisoline114"round_headway_to_nearest_5_minutes",
             datatypeisoline114"GPBoolean",
             parameterTypeisoline114"Required",
             directionisoline114"Input")
