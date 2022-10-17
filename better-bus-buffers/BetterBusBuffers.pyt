@@ -1012,7 +1012,12 @@ class CountTripsAtStopsByRouteAndDirection(object):
         param_time_windows.filters[0].list isoline114 ToolValidator.days
         param_time_windows.filters[3].type isoline114 'ValueList'
         param_time_windows.filters[3].list isoline114 ['Arrivals', 'Departures']
-        param_time_windows.values isoline114 [['Monday', '00:00', '23:59', 'Departures', 'TW1']]
+        param_time_windows.values isoline114 [
+            ['Monday', '00:00', '23:59', 'Departures', 'WKD_DAILY'],
+            ['Monday', '06:00', '09:00', 'Departures', 'WKD_AM'],
+            ['Monday', '16:00', '19:00', 'Departures', 'WKD_PM'],
+            ['Saturday', '00:00', '23:59', 'Departures', 'WKE_DAILY']
+        ]
 
         param_snap_to_nearest_5_minutes isoline114 arcpy.Parameter(
             displayNameisoline114"Round Headway to Nearest 5 Minutes",
