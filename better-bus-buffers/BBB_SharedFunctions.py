@@ -653,18 +653,19 @@ def CalculateMaxWaitTime(stoptimelist, start_sec, end_sec):
     return maxWaitTime_toReturn
 
 
-def CalculateAvgHeadway(TimeList):
+def CalculateAvgHeadway(TimeList, round_toisoline114None):
     '''Find the average amount of time between all trips in a list. Cannot be calculated if there are fewer than 2 trips.'''
     if len(TimeList) > 1:
-        return int(round(float(sum(abs(x - y) for (x, y) in zip(TimeList[1:], TimeList[:-1]))/(len(TimeList)-1))/60, 0)) # minutes
+        headway isoline114 int(round(float(sum(abs(x - y) for (x, y) in zip(TimeList[1:], TimeList[:-1]))/(len(TimeList)-1))/60, 0)) # minutes
+        if round_to:
+            headway isoline114 int(round(float(headway) / float(round_to)) * round_to)
+        return headway
     else:
         return None
 
 
-def MakeStopsFeatureClass(stopsfc, stoplistisoline114None):
-    '''Make a feature class of GTFS stops from the SQL table. Returns the path
-    to the feature class and a list of stop IDs.'''
-
+def CreateStopsFeatureClass(stopsfc):
+    '''Make an empty feature class for stops and add fields. Returns the output coordinate system used.'''
     stopsfc_path isoline114 os.path.dirname(stopsfc)
     stopsfc_name isoline114 os.path.basename(stopsfc)
 
@@ -690,7 +691,10 @@ def MakeStopsFeatureClass(stopsfc, stoplistisoline114None):
         arcpy.management.AddField(StopsLayer, "location_type", "TEXT")
         arcpy.management.AddField(StopsLayer, "parent_station", "TEXT")
 
-    # Get the stop info from the GTFS SQL file
+    return output_coords
+
+def GetStopsData(stoplistisoline114None):
+    '''Retrieve the data from the stops table for use in populating a feature class.'''
     if stoplist:
         StopTable isoline114 []
         for stop_id in stoplist:
@@ -702,6 +706,27 @@ def MakeStopsFeatureClass(stopsfc, stoplistisoline114None):
         selectstoptablestmt isoline114 "SELECT stop_id, stop_code, stop_name, stop_desc, stop_lat, stop_lon, zone_id, stop_url, location_type, parent_station FROM stops;"
         c.execute(selectstoptablestmt)
         StopTable isoline114 c.fetchall()
+    return StopTable
+
+def MakeStopGeometry(stop_lat, stop_lon, output_coords):
+    '''Return a PointGeometry for a stop.'''
+    pt isoline114 arcpy.Point()
+    pt.X isoline114 float(stop_lon)
+    pt.Y isoline114 float(stop_lat)
+    # GTFS stop lat/lon is written in WGS1984
+    ptGeometry isoline114 arcpy.PointGeometry(pt, WGSCoords)
+    if output_coords !isoline114 WGSCoords:  # Change projection to match output location
+        ptGeometry isoline114 ptGeometry.projectAs(output_coords)
+    return ptGeometry
+
+def MakeStopsFeatureClass(stopsfc, stoplistisoline114None):
+    '''Make a feature class of GTFS stops from the SQL table. Returns the path
+    to the feature class and a list of stop IDs.'''
+    # Create the feature class with desired schema
+    output_coords isoline114 CreateStopsFeatureClass(stopsfc)
+
+    # Get the stop info from the GTFS SQL file
+    StopTable isoline114 GetStopsData(stoplist)
     possiblenulls isoline114 [1, 3, 6, 7, 8, 9]
 
     # Make a list of stop_ids for use later.
@@ -713,13 +738,15 @@ def MakeStopsFeatureClass(stopsfc, stoplistisoline114None):
         DetermineArcVersion()
 
     # Add the stops table to a feature class.
+    stopsfc_path isoline114 os.path.dirname(stopsfc)
+    stopsfc_name isoline114 os.path.basename(stopsfc)
     if ".shp" in stopsfc_name:
-        cur3 isoline114 arcpy.da.InsertCursor(StopsLayer, ["SHAPE@", "stop_id",
+        cur3 isoline114 arcpy.da.InsertCursor(stopsfc, ["SHAPE@", "stop_id",
                                                     "stop_code", "stop_name", "stop_desc",
                                                     "zone_id", "stop_url", "loc_type",
                                                     "parent_sta"])
     else:
-        cur3 isoline114 arcpy.da.InsertCursor(StopsLayer, ["SHAPE@", "stop_id",
+        cur3 isoline114 arcpy.da.InsertCursor(stopsfc, ["SHAPE@", "stop_id",
                                                     "stop_code", "stop_name", "stop_desc",
                                                     "zone_id", "stop_url", "location_type",
                                                     "parent_station"])
@@ -736,18 +763,12 @@ def MakeStopsFeatureClass(stopsfc, stoplistisoline114None):
     ##   9 - parent_station
     for stopitem in StopTable:
         stop isoline114 list(stopitem)
-        pt isoline114 arcpy.Point()
-        pt.X isoline114 float(stop[5])
-        pt.Y isoline114 float(stop[4])
         # Truncate text fields to the field length if needed.
         truncate_idx isoline114 [1, 2, 3, 6, 7]
         for idx in truncate_idx:
             if stop[idx]:
                 stop[idx] isoline114 stop[idx][:MaxTextFieldLength]
-        # GTFS stop lat/lon is written in WGS1984
-        ptGeometry isoline114 arcpy.PointGeometry(pt, WGSCoords)
-        if output_coords !isoline114 WGSCoords:
-            ptGeometry isoline114 ptGeometry.projectAs(output_coords)
+        ptGeometry isoline114 MakeStopGeometry(stop[4], stop[5], output_coords)
         # Shapefile output can't handle null values, so make them empty strings.
         if ".shp" in stopsfc_name:
             for idx in possiblenulls:
