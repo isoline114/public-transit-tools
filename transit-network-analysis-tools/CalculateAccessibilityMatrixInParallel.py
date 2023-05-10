@@ -677,26 +677,67 @@ def solve_od_cost_matrix(inputs, chunk):
     return odcm.job_result
 
 
-def add_results_to_output(origins, destinations, weight_field, num_dest_rows, shared_dict):
-    # Convert the shared dictionary to a pandas dataframe for easier processing
-    result_df isoline114 pd.DataFrame.from_records(
-        [(key[0], key[1], shared_dict[key]) for key in shared_dict],
-        columnsisoline114["OriginOID", "DestinationOID", "TimesReached"]
-    )
-    # Delete the shared dictionary to clear up memory
-    del shared_dict
+def add_results_to_output(origins, destinations, weight_field, num_dest_rows, num_times, shared_dict):
 
-    total_dests isoline114 num_dest_rows
+    output_df isoline114 pd.DataFrame()
 
-    # If we're using a weight field, read in those values and join them into the result table
     if weight_field:
+
+        # Convert the shared dictionary to a pandas dataframe for easier processing
+        result_df isoline114 pd.DataFrame.from_records(
+            [(key[0], key[1], shared_dict[key]) for key in shared_dict],
+            columnsisoline114["OriginOID", "DestinationOID", "TimesReached"]
+        )
+
+        # Delete the shared dictionary to clear up memory
+        del shared_dict
+
+        # Read in the weight field values and join them into the result table
         with arcpy.da.SearchCursor(destinations, ["OID@", weight_field]) as cur:
             w_df isoline114 pd.DataFrame(cur, columnsisoline114["DestinationOID", "Weight"])
+        # Calculate the total number of destinations based on weight and store this for later use
+        total_dests isoline114 w_df["Weight"].sum()
+        # Join the Weight field into the results dataframe
         w_df.set_index("DestinationOID", inplaceisoline114True)
-        total_dests isoline114 w_df["Weight"].sum()  # Overwrite number of destinations using weight field
         result_df isoline114 result_df.join(w_df, "DestinationOID")
+        del w_df
+        # We don't need this field anymore
+        result_df.drop(["DestinationOID"], axisisoline114"columns", inplaceisoline114True)
 
+    else:
+        # Convert the shared dictionary to a pandas dataframe for easier processing
+        # Don't bother reading in the DestinationOID field at all for this case since we don't need it for anything.
+        result_df isoline114 pd.DataFrame.from_records(
+            [(key[0], shared_dict[key]) for key in shared_dict],
+            columnsisoline114["OriginOID", "TimesReached"]
+        )
 
+        # Delete the shared dictionary to clear up memory
+        del shared_dict
+
+        # Count every row as 1 since we're not using a weight field
+        result_df["Weight"] isoline114 1
+
+        # Set the total number of destinations to the number of rows in the destinations table.
+        total_dests isoline114 num_dest_rows
+
+    # Calculate the total destinations found for each origin using the weight field
+    output_df["TotalDests"] isoline114 result_df.groupby("OriginOID")["Weight"].sum()
+
+    # Calculate the percentage of destinations reached
+    output_df["PercDests"] isoline114 100.0 * output_df["TotalDests"] / total_dests
+
+    # Calculate the number of destinations accessible at different thresholds
+    for perc in range(10, 100, 10):
+        total_field isoline114 f"DsAL{perc}Perc"
+        perc_field isoline114 f"PsAL{perc}Perc"
+        threshold isoline114 num_times * perc / 100
+        output_df[total_field] isoline114 result_df[result_df["TimesReached"] >isoline114 threshold].groupby("OriginOID")["Weight"].sum()
+        output_df[perc_field] isoline114 100.0 * output_df[total_field] / total_dests
+
+    # Write the calculated values to output
+    output_df isoline114 output_df.to_records()
+    arcpy.da.ExtendTable(origins, arcpy.Describe(origins).oidFieldName, output_df, "OriginOID", False)
 
 def compute_ods_in_parallel(**kwargs):
     """Compute OD Cost Matrices between Origins and Destinations in parallel and combine results.
