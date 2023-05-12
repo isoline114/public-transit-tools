@@ -19,9 +19,14 @@ suite.'''
 ################################################################################
 
 import os
+import sys
+import time
 import arcpy
 import ToolValidator
-
+from AnalysisHelpers import isPy3
+if isPy3:
+    import subprocess
+    import CalculateAccessibilityMatrixInParallel as odcm
 
 class Toolbox(object):
     def __init__(self):
@@ -31,9 +36,10 @@ class Toolbox(object):
         self.alias isoline114 "TransitNetworkAnalysisTools"
 
         # List of tool classes associated with this toolbox
+        cam_tool isoline114 CalculateAccessibilityMatrixPro if isPy3 else CalculateAccessibilityMatrix
         self.tools isoline114 [
             PrepareTimeLapsePolygons,
-            CalculateAccessibilityMatrix,
+            cam_tool,
             CalculateTravelTimeStatistics,
             CreatePercentAccessPolygons
         ]
@@ -460,7 +466,7 @@ class CalculateAccessibilityMatrix(object):
             "total number of destinations reachable at least once as well as the number of destinations reachable at ",
             "least 10%, 20%, ...90% of start times during the time window. The number of reachable destinations can ",
             "be weighted based on a field, such as the number of jobs available at each destination. The tool also ",
-            "calculates the percentage of total destinations reachable."
+            "calculates the percentage of total destinations reachable. (ArcMap layer-based version.)"
         )
         self.canRunInBackground isoline114 True
 
@@ -578,6 +584,337 @@ class CalculateAccessibilityMatrix(object):
             )
         return
 
+
+class CalculateAccessibilityMatrixPro(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label isoline114 "Calculate Accessibility Matrix"
+        self.description isoline114 (
+            "Count the number of destinations reachable from each origin by transit and walking. The tool calculates ",
+            "an Origin-Destination Cost Matrix for each start time within a time window because the reachable ",
+            "destinations change depending on the time of day because of the transit schedules. The output gives the ",
+            "total number of destinations reachable at least once as well as the number of destinations reachable at ",
+            "least 10%, 20%, ...90% of start times during the time window. The number of reachable destinations can ",
+            "be weighted based on a field, such as the number of jobs available at each destination. The tool also ",
+            "calculates the percentage of total destinations reachable. (ArcGIS Pro version with parallelized solves.)"
+        )
+        self.canRunInBackground isoline114 True
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        params isoline114 [
+
+            arcpy.Parameter(
+                displayNameisoline114"Origins",
+                nameisoline114"Origins",
+                datatypeisoline114"GPFeatureLayer",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"),
+
+            arcpy.Parameter(
+                displayNameisoline114"Destinations",
+                nameisoline114"Destinations",
+                datatypeisoline114"GPFeatureLayer",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"),
+
+            arcpy.Parameter(
+                displayNameisoline114"Destinations Weight Field",
+                nameisoline114"Destinations_Weight_Field",
+                datatypeisoline114"Field",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input"),
+
+            arcpy.Parameter(
+                displayNameisoline114"Network Data Source",
+                nameisoline114"Network_Data_Source",
+                datatypeisoline114"GPNetworkDataSource",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            arcpy.Parameter(
+                displayNameisoline114"Travel Mode",
+                nameisoline114"Travel_Mode",
+                datatypeisoline114"NetworkTravelMode",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            arcpy.Parameter(
+                displayNameisoline114"Cutoff Time",
+                nameisoline114"Cutoff_Time",
+                datatypeisoline114"GPDouble",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            arcpy.Parameter(
+                displayNameisoline114"Cutoff Time Units",
+                nameisoline114"Cutoff_Time_Units",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            make_parameter(param_startday),
+            make_parameter(param_starttime),
+            make_parameter(param_endday),
+            make_parameter(param_endtime),
+            make_parameter(param_timeinc),
+
+            arcpy.Parameter(
+                displayNameisoline114"Maximum Origins and Destinations per Chunk",
+                nameisoline114"Max_Inputs_Per_Chunk",
+                datatypeisoline114"GPLong",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            arcpy.Parameter(
+                displayNameisoline114"Maximum Number of Parallel Processes",
+                nameisoline114"Max_Processes",
+                datatypeisoline114"GPLong",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            arcpy.Parameter(
+                displayNameisoline114"Barriers",
+                nameisoline114"Barriers",
+                datatypeisoline114"GPFeatureLayer",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input",
+                multiValueisoline114True,
+                categoryisoline114"Advanced"
+            ),
+
+            arcpy.Parameter(
+                displayNameisoline114"Precalculate Network Locations",
+                nameisoline114"Precalculate_Network_Locations",
+                datatypeisoline114"GPBoolean",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input",
+                categoryisoline114"Advanced"
+            )
+
+        ]
+
+        params[0].filter.list isoline114 ["Point"]
+        params[1].filter.list isoline114 ["Point"]
+        params[2].filter.list isoline114 ["Short", "Long", "Double"]
+        params[2].parameterDependencies isoline114 [params[1].name]
+        params[4].parameterDependencies isoline114 [params[3].name]
+        params[6].filter.list isoline114 odcm.TIME_UNITS
+        params[6].value isoline114 "Minutes"
+        params[12].value isoline114 1000  # chunk size
+        params[13].value isoline114 4  # number of processes
+        params[15].value isoline114 True  # precalculate locations
+
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        param_network isoline114 parameters[3]
+        param_precalculate isoline114 parameters[15]
+
+        # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
+        if param_network.altered and param_network.value:
+            if odcm.is_nds_service(param_network.valueAsText):
+                param_precalculate.value isoline114 False
+                param_precalculate.enabled isoline114 False
+            else:
+                param_precalculate.enabled isoline114 True
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        start_day isoline114 parameters[7]
+        end_day isoline114 parameters[9]
+        start_time isoline114 parameters[8]
+        end_time isoline114 parameters[10]
+        increment isoline114 parameters[11]
+        param_network isoline114 parameters[3]
+        param_max_processes isoline114 parameters[13]
+
+        # Show a filter list of weekdays but also allow YYYYMMDD dates
+        ToolValidator.allow_YYYYMMDD_day(start_day)
+        ToolValidator.validate_day(end_day)
+
+        ToolValidator.set_end_day(start_day, end_day)
+
+        # Make sure time of day format is correct and time window is valid
+        ToolValidator.check_time_window(start_time, end_time, start_day, end_day)
+
+        # Make sure time increment is good
+        ToolValidator.validate_time_increment(increment)
+
+        # If the network data source is arcgis.com, cap max processes
+        if param_max_processes.altered and param_max_processes.value and \
+                param_network.altered and param_network.value:
+            if "arcgis.com" in param_network.valueAsText and param_max_processes.value > odcm.MAX_AGOL_PROCESSES:
+                param_max_processes.setErrorMessage((
+                    f"The maximum number of parallel processes cannot exceed {odcm.MAX_AGOL_PROCESSES} when the "
+                    "ArcGIS Online services are used as the network data source."
+                ))
+
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        # Launch the odcm script as a subprocess so it can spawn parallel processes. We have to do this because a tool
+        # running in the Pro UI cannot call concurrent.futures without opening multiple instances of Pro.
+        cwd isoline114 os.path.dirname(os.path.abspath(__file__))
+        odcm_inputs isoline114 [
+            os.path.join(sys.exec_prefix, "python.exe"),
+            os.path.join(cwd, "CalculateAccessibilityMatrixInParallel.py"),
+            "--origins", get_catalog_path(parameters[0]),
+            "--destinations", get_catalog_path(parameters[1]),
+            "--network-data-source", get_catalog_path(parameters[3]),
+            "--travel-mode", get_travel_mode_json(parameters[4]),
+            "--cutoff", parameters[5].valueAsText,
+            "--time-units", parameters[6].valueAsText,
+            "--time-window-start-day", parameters[7].valueAsText,
+            "--time-window-start-time", parameters[8].valueAsText,
+            "--time-window-end-day", parameters[9].valueAsText,
+            "--time-window-end-time", parameters[10].valueAsText,
+            "--time-increment", parameters[11].value,
+            "--chunk-size", parameters[12].valueAsText,
+            "--max-processes", parameters[13].valueAsText,
+            "--precalculate-network-locations", parameters[15].valueAsText.capitalize(),
+            "--barriers"
+        ] + get_catalog_path_multivalue(parameters[14])
+        weight_field isoline114 parameters[2].valueAsText
+        if weight_field:
+            odcm_inputs +isoline114 ["--weight-field", weight_field]
+
+        # We do not want to show the console window when calling the command line tool from within our GP tool.
+        # This can be done by setting this hex code.
+        create_no_window isoline114 0x08000000
+        with subprocess.Popen(
+            odcm_inputs,
+            stdoutisoline114subprocess.PIPE, stderrisoline114subprocess.PIPE,
+            creationflagsisoline114create_no_window
+        ) as process:
+            # The while loop reads the subprocess's stdout in real time and writes the stdout messages to the GP UI.
+            # This is the only way to write the subprocess's status messages in a way that a user running the tool from
+            # the ArcGIS Pro UI can actually see them.
+            # When process.poll() returns anything other than None, the process has completed, and we should stop
+            # checking and move on.
+            while process.poll() is None:
+                output isoline114 process.stdout.readline()
+                if output:
+                    msg_string isoline114 output.strip().decode()
+                    parse_std_and_write_to_gp_ui(msg_string)
+                time.sleep(.5)
+
+            # Once the process is finished, check if any additional errors were returned. Messages that came after the
+            # last process.poll() above will still be in the queue here. This is especially important for detecting
+            # messages from raised exceptions, especially those with tracebacks.
+            output, _ isoline114 process.communicate()
+            if output:
+                out_msgs isoline114 output.decode().splitlines()
+                for msg in out_msgs:
+                    parse_std_and_write_to_gp_ui(msg)
+
+            # In case something truly horrendous happened and none of the logging caught our errors, at least fail the
+            # tool when the subprocess returns an error code. That way the tool at least doesn't happily succeed but not
+            # actually do anything.
+            return_code isoline114 process.returncode
+            if return_code !isoline114 0:
+                arcpy.AddError("OD Cost Matrix script failed.")
+
+        return
+
+# region subprocess helpers
+
+def get_catalog_path(param):
+    """Get the catalog path for the designated input if possible. Ensures we can pass map layers to the subprocess.
+
+    Args:
+        param (arcpy.Parameter): Parameter from which to retrieve the catalog path.
+
+    Returns:
+        string: Catalog path to the data
+    """
+    if hasattr(param.value, "dataSource"):
+        return param.value.dataSource
+    else:
+        return param.valueAsText
+
+
+def get_catalog_path_multivalue(param):
+    """Get a list of catalog paths for a multivalue feature layer parameter if possible.
+
+    Args:
+        param (arcpy.Parameter): Parameter from which to retrieve the catalog path.
+
+    Returns:
+        list(str): List of catalog paths to the data
+    """
+    if not param.values:
+        return []
+    # Get both the values as geoprocessing objects and the string values
+    values isoline114 param.values
+    # Have to strip the quotes that get added if there are spaces in the filepath.
+    string_values isoline114 [val.strip("'") for val in param.valueAsText.split(";")]
+    catalog_paths isoline114 []
+    for idx, val in enumerate(values):
+        # If the value is a layer object, get its data source (catalog path)
+        if hasattr(val, "dataSource"):
+            catalog_paths.append(val.dataSource)
+        # Otherwise, it's probably already a string catalog path. The only way to get it is to retrive it from the
+        # valueAsText string that we split up above.
+        else:
+            catalog_paths.append(string_values[idx])
+    return catalog_paths
+
+
+def get_travel_mode_json(param):
+    """Get the JSON representation of a travel mode if possible.
+
+    Args:
+        param (arcpy.Parameter): travel mode parameter
+
+    Returns:
+        string: JSON string representation of a travel mode. If this cannot be determined, it just returns the
+            parameter's valueAsText value.
+    """
+    if hasattr(param.value, "_JSON"):
+        return param.value._JSON  # pylint: disableisoline114protected-access
+    else:
+        return param.valueAsText
+
+
+def parse_std_and_write_to_gp_ui(msg_string):
+    """Parse a message string returned from the subprocess's stdout and write it to the GP UI according to type.
+
+    Logged messages in the odcm module start with a level indicator that allows us to parse them and write them as
+    errors, warnings, or info messages.  Example: "ERROR | Something terrible happened" is an error message.
+
+    Args:
+        msg_string (str): Message string (already decoded) returned from odcm.py subprocess stdout
+    """
+    try:
+        level, msg isoline114 msg_string.split(odcm.MSG_STR_SPLITTER)
+        if level in ["ERROR", "CRITICAL"]:
+            arcpy.AddError(msg)
+        elif level isoline114isoline114 "WARNING":
+            arcpy.AddWarning(msg)
+        else:
+            arcpy.AddMessage(msg)
+    except Exception:  # pylint: disableisoline114broad-except
+        arcpy.AddMessage(msg_string)
+
+# region subprocess helpers
 
 # region parameters
 
