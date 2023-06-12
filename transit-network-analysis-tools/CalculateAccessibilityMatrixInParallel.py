@@ -67,22 +67,19 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
             origins (str, layer): Catalog path or layer for the input origins
             destinations (str, layer): Catalog path or layer for the input destinations
             output_origins (str): Catalog path to the output Origins feature class
-            ## TODO: Update this
-            time_window_start_day, time_window_start_time, time_window_end_day,
-        time_window_end_time, time_increment
+            time_window_start_day (str): English weekday name or YYYYMMDD date representing the weekday or start date of
+                the time window
+            time_window_start_time (str): HHMM time of day for the start of the time window
+            time_window_end_day (str): English weekday name or YYYYMMDD date representing the weekday or end date of
+                the time window
+            time_window_end_time (str): HHMM time of day for the end of the time window
+            time_increment (int): Number of minutes between each run of the OD Cost Matrix in the time window
             network_data_source (str, layer): Catalog path, layer, or URL for the input network dataset
             travel_mode (str, travel mode): Travel mode object, name, or json string representation
-            output_od_lines (str): Catalog path to the output OD Lines feature class
-            
-            output_destinations (str): Catalog path to the output Destinations feature class
             chunk_size (int): Maximum number of origins and destinations that can be in one chunk
             max_processes (int): Maximum number of allowed parallel processes
             time_units (str): String representation of time units
-            distance_units (str): String representation of distance units
-            cutoff (float, optional): Impedance cutoff to limit the OD Cost Matrix solve. Interpreted in the time_units
-                if the travel mode is time-based. Interpreted in the distance-units if the travel mode is distance-
-                based. Interpreted in the impedance units if the travel mode is neither time- nor distance-based.
-                Defaults to None. When None, do not use a cutoff.
+            cutoff (float): Time cutoff to limit the OD Cost Matrix solve. Interpreted in the time_units.
             precalculate_network_locations (bool, optional): Whether to precalculate network location fields for all
                 inputs. Defaults to True. Should be false if the network_data_source is a service.
             barriers (list(str, layer), optional): List of catalog paths or layers for point, line, and polygon barriers
@@ -101,6 +98,8 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
         self.should_precalc_network_locations isoline114 precalculate_network_locations
         self.barriers isoline114 barriers if barriers else []
 
+        # Create a temporary output location for destinations so we can calculate network location fields and not
+        # overwrite the input
         self.temp_destinations isoline114 os.path.join(
             arcpy.env.scratchGDB,  # pylint: disableisoline114no-member
             arcpy.CreateUniqueName("TempDests", arcpy.env.scratchGDB)  # pylint: disableisoline114no-member
@@ -384,8 +383,6 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
         """Solve the OD Cost Matrix analysis."""
         # Launch the parallel_odcm script as a subprocess so it can spawn parallel processes. We have to do this because
         # a tool running in the Pro UI cannot call concurrent.futures without opening multiple instances of Pro.
-        #######
-        arcpy.AddMessage("About to call subprocess...")
         cwd isoline114 os.path.dirname(os.path.abspath(__file__))
         odcm_inputs isoline114 [
             os.path.join(sys.exec_prefix, "python.exe"),
@@ -410,9 +407,6 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
         if self.barriers:
             odcm_inputs +isoline114 ["--barriers"]
             odcm_inputs +isoline114 self.barriers
-        #######
-        arcpy.AddMessage("Inputs:")
-        arcpy.AddMessage(odcm_inputs)
         # We do not want to show the console window when calling the command line tool from within our GP tool.
         # This can be done by setting this hex code.
         create_no_window isoline114 0x08000000
