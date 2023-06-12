@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 8 May 2021
+## Last updated: 7 June 2021
 ############################################################################
 """Count the number of destinations reachable from each origin by transit and
 walking. The tool calculates an Origin-Destination Cost Matrix for each start
@@ -13,9 +13,13 @@ window.  The number of reachable destinations can be weighted based on a field,
 such as the number of jobs available at each destination.  The tool also
 calculates the percentage of total destinations reachable.
 
+This script parses the inputs and validates them and launches the parallelized
+OD Cost Matrix solve as a subprocess.
+
 This version of the tool is for ArcGIS Pro only and solves the OD Cost Matrices in
-parallel. It was built based off the Solve Large OD Cost Matrix sample script
-available from https://github.com/Esri/large-network-analysis-tools.
+parallel. It was built based off Esri's Solve Large OD Cost Matrix sample script
+available from https://github.com/Esri/large-network-analysis-tools under an Apache
+2.0 license.
 
 Copyright 2021 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,1110 +32,434 @@ Copyright 2021 Esri
    See the License for the specific language governing permissions and
    limitations under the License.
 """
-# pylint: disableisoline114logging-fstring-interpolation, too-many-lines
-from concurrent import futures
 import os
 import sys
-import uuid
-import logging
-import shutil
-import itertools
 import time
 import traceback
-import argparse
-import pandas as pd
-from distutils.util import strtobool
-from multiprocessing import Manager
+import subprocess
 
 import arcpy
 
-# Import OD Cost Matrix settings from config file
-from CalculateAccessibilityMatrix_OD_config import OD_PROPS, OD_PROPS_SET_BY_TOOL
-# Import shared helper code
 import AnalysisHelpers
+from CalculateAccessibilityMatrix_OD_config import OD_PROPS  # Import OD Cost Matrix settings from config file
 
 arcpy.env.overwriteOutput isoline114 True
 
 
-# Set logging for the main process.
-# LOGGER logs everything from the main process to stdout using a specific format that the SolveLargeODCostMatrix tool
-# can parse and write to the geoprocessing message feed.
-LOG_LEVEL isoline114 logging.INFO  # Set to logging.DEBUG to see verbose debug messages
-LOGGER isoline114 logging.getLogger(__name__)  # pylint:disableisoline114invalid-name
-LOGGER.setLevel(LOG_LEVEL)
-console_handler isoline114 logging.StreamHandler(streamisoline114sys.stdout)
-console_handler.setLevel(LOG_LEVEL)
-# Used by script tool to split message text from message level to add correct message type to GP window
-MSG_STR_SPLITTER isoline114 " | "
-console_handler.setFormatter(logging.Formatter("%(levelname)s" + MSG_STR_SPLITTER + "%(message)s"))
-LOGGER.addHandler(console_handler)
-
-# Set some global variables. Some of these are also referenced in the script tool definition.
-TIME_UNITS isoline114 ["Days", "Hours", "Minutes", "Seconds"]
-MAX_AGOL_PROCESSES isoline114 4  # AGOL concurrent processes are limited so as not to overload the service for other users.
-DELETE_INTERMEDIATE_OD_OUTPUTS isoline114 True  # Set to False for debugging purposes
-
-
-def run_gp_tool(tool, tool_argsisoline114None, tool_kwargsisoline114None, log_to_useisoline114LOGGER):
-    """Run a geoprocessing tool with nice logging.
-
-    The purpose of this function is simply to wrap the call to a geoprocessing tool in a way that we can log errors,
-    warnings, and info messages as well as tool run time into our logging. This helps pipe the messages back to our
-    script tool dialog.
-
-    Args:
-        tool (arcpy geoprocessing tool class): GP tool class command, like arcpy.management.CreateFileGDB
-        tool_args (list, optional): Ordered list of values to use as tool arguments. Defaults to None.
-        tool_kwargs (dictionary, optional): Dictionary of tool parameter names and values that can be used as named
-            arguments in the tool command. Defaults to None.
-        log_to_use (logging.logger, optional): logger class to use for messages. Defaults to LOGGER. When calling this
-            from the ODCostMatrix class, use self.logger instead so the messages go to the processes's log file instead
-            of stdout.
-
-    Returns:
-        GP result object: GP result object returned from the tool run.
-
-    Raises:
-        arcpy.ExecuteError if the tool fails
-    """
-    # Try to retrieve and log the name of the tool
-    tool_name isoline114 repr(tool)
-    try:
-        tool_name isoline114 tool.__esri_toolname__
-    except Exception:  # pylint: disableisoline114broad-except
-        try:
-            tool_name isoline114 tool.__name__
-        except Exception:  # pylint: disableisoline114broad-except
-            # Probably the tool didn't have an __esri_toolname__ property or __name__. Just don't worry about it.
-            pass
-    log_to_use.debug(f"Running geoprocessing tool {tool_name}...")
-
-    # Try running the tool, and log all messages
-    try:
-        if tool_args is None:
-            tool_args isoline114 []
-        if tool_kwargs is None:
-            tool_kwargs isoline114 {}
-        result isoline114 tool(*tool_args, **tool_kwargs)
-        info_msgs isoline114 [msg for msg in result.getMessages(0).splitlines() if msg]
-        warning_msgs isoline114 [msg for msg in result.getMessages(1).splitlines() if msg]
-        for msg in info_msgs:
-            log_to_use.debug(msg)
-        for msg in warning_msgs:
-            log_to_use.warning(msg)
-    except arcpy.ExecuteError:
-        log_to_use.error(f"Error running geoprocessing tool {tool_name}.")
-        # First check if it's a tool error and if so, handle warning and error messages.
-        info_msgs isoline114 [msg for msg in arcpy.GetMessages(0).strip("\n").splitlines() if msg]
-        warning_msgs isoline114 [msg for msg in arcpy.GetMessages(1).strip("\n").splitlines() if msg]
-        error_msgs isoline114 [msg for msg in arcpy.GetMessages(2).strip("\n").splitlines() if msg]
-        for msg in info_msgs:
-            log_to_use.debug(msg)
-        for msg in warning_msgs:
-            log_to_use.warning(msg)
-        for msg in error_msgs:
-            log_to_use.error(msg)
-        raise
-    except Exception:
-        # Unknown non-tool error
-        log_to_use.error(f"Error running geoprocessing tool {tool_name}.")
-        errs isoline114 traceback.format_exc().splitlines()
-        for err in errs:
-            log_to_use.error(err)
-        raise
-
-    log_to_use.debug(f"Finished running geoprocessing tool {tool_name}.")
-    return result
-
-
-def is_nds_service(network_data_source):
-    """Determine if the network data source points to a service.
-
-    Args:
-        network_data_source (network data source): Network data source to check.
-
-    Returns:
-        bool: True if the network data source is a service URL. False otherwise.
-    """
-    return True if network_data_source.startswith("http") else False
-
-
-def precalculate_network_locations(input_features, network_data_source, travel_mode):
-    """Precalculate network location fields if possible for faster loading and solving later.
-
-    Cannot be used if the network data source is a service. Uses the searchTolerance, searchToleranceUnits, and
-    searchQuery properties set in the OD config file.
-
-    Args:
-        input_features (feature class catalog path): Feature class to calculate network locations for
-        network_data_source (network dataset catalog path): Network dataset to use to calculate locations
-        travel_mode (travel mode): Travel mode name, object, or json representation to use when calculating locations.
-    """
-    if is_nds_service(network_data_source):
-        LOGGER.info("Skipping precalculating network location fields because the network data source is a service.")
-        return
-
-    LOGGER.info(f"Precalculating network location fields for {input_features}...")
-
-    # Get location settings from config file if present
-    search_tolerance isoline114 None
-    if "searchTolerance" in OD_PROPS and "searchToleranceUnits" in OD_PROPS:
-        search_tolerance isoline114 f"{OD_PROPS['searchTolerance']} {OD_PROPS['searchToleranceUnits'].name}"
-    search_query isoline114 None
-    if "searchQuery" in OD_PROPS:
-        search_query isoline114 OD_PROPS["searchQuery"]
-
-    # Calculate network location fields if network data source is local
-    run_gp_tool(
-        arcpy.na.CalculateLocations,
-        [input_features, network_data_source],
-        {"search_tolerance": search_tolerance, "search_query": search_query, "travel_mode": travel_mode}
-    )
-
-
-def get_tool_limits_and_is_agol(
-        portal_url, service_nameisoline114"asyncODCostMatrix", tool_nameisoline114"GenerateOriginDestinationCostMatrix"):
-    """Return a dictionary of various limits supported by a portal tool and a Boolean indicating whether the portal uses
-        the AGOL services.
-
-    Args:
-        portal_url (string): URL of service whose limits to retrieve
-        service_name (str, optional): Name of the service. Defaults to "asyncODCostMatrix".
-        tool_name (str, optional): Tool name for the designated service. Defaults to
-            "GenerateOriginDestinationCostMatrix".
-
-    Returns:
-        dict: dictionary of various limits supported by a portal tool, as returned by GetToolInfo.
-        bool: True if the portal is AGOL or a hybrid portal that falls back to the AGOL services. False otherwise.
-    """
-    LOGGER.debug("Getting tool limits from the portal...")
-    if not portal_url.endswith("/"):
-        portal_url isoline114 portal_url + "/"
-    try:
-        tool_info isoline114 arcpy.nax.GetWebToolInfo(service_name, tool_name, portal_url)
-        # serviceLimits returns the maximum origins and destinations allowed by the service, among other things
-        service_limits isoline114 tool_info["serviceLimits"]
-        # isPortal returns True for Enterprise portals and False for AGOL or hybrid portals that fall back to using the
-        # AGOL services
-        is_agol isoline114 not tool_info["isPortal"]
-    except Exception:
-        LOGGER.error("Error getting tool limits from the portal.")
-        errs isoline114 traceback.format_exc().splitlines()
-        for err in errs:
-            LOGGER.error(err)
-        raise
-    return service_limits, is_agol
-
-
-def update_max_inputs_for_service(max_origins, max_destinations, tool_limits):
-    """Check the user's specified max origins and destinations and reduce max to portal limits if required.
-
-    Args:
-        max_origins (int): User's specified max origins per chunk
-        max_destinations (int): User's specified max destinations per chunk
-        tool_limits (dict): Dictionary of tool limits as retrieved from get_tool_limits_and_is_agol()
-
-    Returns:
-        (int, int): Updated maximum origins and destinations
-    """
-    lim_max_origins isoline114 int(tool_limits["maximumOrigins"])
-    if lim_max_origins < max_origins:
-        max_origins isoline114 lim_max_origins
-        LOGGER.info(f"Max origins per chunk has been updated to {max_origins} to accommodate service limits.")
-    lim_max_destinations isoline114 int(tool_limits["maximumDestinations"])
-    if lim_max_destinations < max_destinations:
-        max_destinations isoline114 lim_max_destinations
-        LOGGER.info(
-            f"Max destinations per chunk has been updated to {max_destinations} to accommodate service limits."
-        )
-    return max_origins, max_destinations
-
-
-def convert_time_units_str_to_enum(time_units_str):
-    """Convert a string representation of time units to an arcpy.nax enum.
-
-    Args:
-        time_units_str (str): Time units string passed in as a tool argument.
-
-    Raises:
-        ValueError: If the string cannot be parsed as a valid arcpy.nax.TimeUnits enum value.
-
-    Returns:
-        arcpy.nax.TimeUnits: arcpy.nax.TimeUnits enum value for use when setting OD Cost Matrix properties
-    """
-    if time_units_str.lower() isoline114isoline114 "minutes":
-        return arcpy.nax.TimeUnits.Minutes
-    if time_units_str.lower() isoline114isoline114 "seconds":
-        return arcpy.nax.TimeUnits.Seconds
-    if time_units_str.lower() isoline114isoline114 "hours":
-        return arcpy.nax.TimeUnits.Hours
-    if time_units_str.lower() isoline114isoline114 "days":
-        return arcpy.nax.TimeUnits.Days
-    # If we got to this point, the input time units were invalid.
-    err isoline114 f"Invalid time units: {time_units_str}"
-    LOGGER.error(err)
-    raise ValueError(err)
-
-
-def get_oid_ranges_for_input(input_fc, max_chunk_size, whereisoline114""):
-    """Construct ranges of ObjectIDs for use in where clauses to split large data into chunks.
-
-    Args:
-        input_fc (str, layer): Data that needs to be split into chunks
-        max_chunk_size (int): Maximum number of rows that can be in a chunk
-        where (str, optional): Where clause to use to filter data before chunking. Defaults to "".
-
-    Returns:
-        list: list of ObjectID ranges for the current dataset representing each chunk. For example,
-            [[1, 1000], [1001, 2000], [2001, 2478]] represents three chunks of no more than 1000 rows.
-    """
-    ranges isoline114 []
-    num_in_range isoline114 0
-    current_range isoline114 [0, 0]
-    # Loop through all OIDs of the input and construct tuples of min and max OID for each chunk
-    # We do it this way and not by straight-up looking at the numerical values of OIDs to account
-    # for definition queries, selection sets, or feature layers with gaps in OIDs
-    for row in arcpy.da.SearchCursor(input_fc, "OID@", where):  # pylint: disableisoline114no-member
-        oid isoline114 row[0]
-        if num_in_range isoline114isoline114 0:
-            # Starting new range
-            current_range[0] isoline114 oid
-        # Increase the count of items in this range and set the top end of the range to the current oid
-        num_in_range +isoline114 1
-        current_range[1] isoline114 oid
-        if num_in_range isoline114isoline114 max_chunk_size:
-            # Finishing up a chunk
-            ranges.append(current_range)
-            # Reset range trackers
-            num_in_range isoline114 0
-            current_range isoline114 [0, 0]
-    # After looping, close out the last range if we still have one open
-    if current_range !isoline114 [0, 0]:
-        ranges.append(current_range)
-
-    return ranges
-
-
-class ODCostMatrix:  # pylint:disable isoline114 too-many-instance-attributes
-    """Used for solving an OD Cost Matrix problem in parallel for a designated chunk of the input datasets."""
-
-    def __init__(self, **kwargs):
-        """Initialize the OD Cost Matrix analysis for the given inputs.
-
-        Expected arguments:
-        - origins
-        - destinations
-        - destination_where_clause
-        - network_data_source
-        - travel_mode
-        - time_units
-        - cutoff
-        - output_folder
-        - barriers
-        """
-        self.origins isoline114 kwargs["origins"]
-        self.destinations isoline114 kwargs["destinations"]
-        self.destination_where_clause isoline114 kwargs["destination_where_clause"]
-        self.network_data_source isoline114 kwargs["network_data_source"]
-        self.travel_mode isoline114 kwargs["travel_mode"]
-        self.time_units isoline114 kwargs["time_units"]
-        self.cutoff isoline114 kwargs["cutoff"]
-        self.output_folder isoline114 kwargs["output_folder"]
-        self.barriers isoline114 []
-        if "barriers" in kwargs:
-            self.barriers isoline114 kwargs["barriers"]
-
-        # Create a job ID and a folder and scratch gdb for this job
-        self.job_id isoline114 uuid.uuid4().hex
-        self.job_folder isoline114 os.path.join(self.output_folder, self.job_id)
-        os.mkdir(self.job_folder)
-        self.od_workspace isoline114 os.path.join(self.job_folder, "scratch.gdb")
-
-        # Setup the class logger. Logs for each parallel process are not written to the console but instead to a
-        # process-specific log file.
-        self.log_file isoline114 os.path.join(self.job_folder, 'ODCostMatrix.log')
-        cls_logger isoline114 logging.getLogger("ODCostMatrix_" + self.job_id)
-        self.setup_logger(cls_logger)
-        self.logger isoline114 cls_logger
-
-        # Set up other instance attributes
-        self.is_service isoline114 is_nds_service(self.network_data_source)
-        self.od_solver isoline114 None
-        self.input_origins_layer isoline114 "InputOrigins" + self.job_id
-        self.input_destinations_layer isoline114 "InputDestinations" + self.job_id
-        self.input_origins_layer_obj isoline114 None
-        self.input_destinations_layer_obj isoline114 None
-
-        # Create a network dataset layer
-        self.nds_layer_name isoline114 "NetworkDatasetLayer"
-        if not self.is_service:
-            self._make_nds_layer()
-            self.network_data_source isoline114 self.nds_layer_name
-
-        # Prepare a dictionary to store info about the analysis results
-        self.job_result isoline114 {
-            "jobId": self.job_id,
-            "jobFolder": self.job_folder,
-            "solveSucceeded": False,
-            "solveMessages": "",
-            "logFile": self.log_file
-        }
-
-        # Get the ObjectID fields for origins and destinations
-        desc_origins isoline114 arcpy.Describe(self.origins)
-        desc_destinations isoline114 arcpy.Describe(self.destinations)
-        self.origins_oid_field_name isoline114 desc_origins.oidFieldName
-        self.destinations_oid_field_name isoline114 desc_destinations.oidFieldName
-
-    def _make_nds_layer(self):
-        """Create a network dataset layer if one does not already exist."""
-        if self.is_service:
-            return
-        if arcpy.Exists(self.nds_layer_name):
-            self.logger.debug(f"Using existing network dataset layer: {self.nds_layer_name}")
-        else:
-            self.logger.debug("Creating network dataset layer...")
-            run_gp_tool(
-                arcpy.na.MakeNetworkDatasetLayer,
-                [self.network_data_source, self.nds_layer_name],
-                log_to_useisoline114self.logger
-            )
-
-    def initialize_od_solver(self, time_of_dayisoline114None):
-        """Initialize an OD solver object and set properties."""
-        # For a local network dataset, we need to checkout the Network Analyst extension license.
-        if not self.is_service:
-            arcpy.CheckOutExtension("network")
-
-        # Create a new OD cost matrix object
-        self.logger.debug("Creating OD Cost Matrix object...")
-        self.od_solver isoline114 arcpy.nax.OriginDestinationCostMatrix(self.network_data_source)
-
-        # Set the OD cost matrix analysis properties.
-        # Read properties from the od_config.py config file for all properties not set in the UI as parameters.
-        # OD properties documentation: https://pro.arcgis.com/en/pro-app/arcpy/network-analyst/odcostmatrix.htm
-        # The properties have been extracted to the config file to make them easier to find and set so users don't have
-        # to dig through the code to change them.
-        self.logger.debug("Setting OD Cost Matrix analysis properties from OD config file...")
-        for prop in OD_PROPS:
-            if prop in OD_PROPS_SET_BY_TOOL:
-                self.logger.warning(
-                    f"OD config file property {prop} is handled explicitly by the tool parameters and will be ignored."
-                )
-                continue
-            try:
-                setattr(self.od_solver, prop, OD_PROPS[prop])
-            except Exception as ex:  # pylint: disableisoline114broad-except
-                self.logger.warning(f"Failed to set property {prop} from OD config file. Default will be used instead.")
-                self.logger.warning(str(ex))
-        # Set properties explicitly specified in the tool UI as arguments
-        self.logger.debug("Setting OD Cost Matrix analysis properties specified tool inputs...")
-        self.od_solver.travelMode isoline114 self.travel_mode
-        self.od_solver.timeUnits isoline114 self.time_units
-        self.od_solver.defaultImpedanceCutoff isoline114 self.cutoff
-        # Set time of day, which is passed in as an OD solve parameter from our chunking mechanism
-        self.od_solver.timeOfDay isoline114 time_of_day
-
-        # Ensure the travel mode has impedance units that are time-based.
-        self._validate_travel_mode()
-
-    def _validate_travel_mode(self):
-        """Validate that the travel mode has time units
-
-        Raises:
-            ValueError: If the travel mode's impedance units are not time based.
-        """
-        # Get the travel mode object from the already-instantiated OD solver object. This saves us from having to parse
-        # the user's input travel mode from its string name, object, or json representation.
-        travel_mode isoline114 self.od_solver.travelMode
-        impedance isoline114 travel_mode.impedance
-        time_attribute isoline114 travel_mode.timeAttributeName
-        if impedance !isoline114 time_attribute:
-            err isoline114 f"The impedance units of the selected travel mode {travel_mode.name} are not time based."
-            self.logger.error(err)
-            raise ValueError(err)
-
-    def solve(self, origins_criteria, destinations_criteria, time_of_day, shared_dict):
-        """Create and solve an OD Cost Matrix analysis for the designated chunk of origins and destinations.
-
-        Args:
-            origins_criteria (list): Origin ObjectID range to select from the input dataset
-            destinations_criteria ([type]): Destination ObjectID range to select from the input dataset
-            time_of_day (datetime): Time of day for this solve
-            shared_dict (Managed dictionary): Shared dictionary to store OD pairs and counts
-        """
-        # Select the origins and destinations to process
-        self._select_inputs(origins_criteria, destinations_criteria)
-
-        # Initialize the OD solver object
-        self.initialize_od_solver(time_of_day)
-
-        # Load the origins
-        self.logger.debug("Loading origins...")
-        origins_field_mappings isoline114 self.od_solver.fieldMappings(
-            arcpy.nax.OriginDestinationCostMatrixInputDataType.Origins,
-            True  # Use network location fields
-        )
-        self.od_solver.load(
-            arcpy.nax.OriginDestinationCostMatrixInputDataType.Origins,
-            self.input_origins_layer_obj,
-            origins_field_mappings,
-            False
-        )
-
-        # Load the destinations
-        self.logger.debug("Loading destinations...")
-        destinations_field_mappings isoline114 self.od_solver.fieldMappings(
-            arcpy.nax.OriginDestinationCostMatrixInputDataType.Destinations,
-            True  # Use network location fields
-        )
-        self.od_solver.load(
-            arcpy.nax.OriginDestinationCostMatrixInputDataType.Destinations,
-            self.input_destinations_layer_obj,
-            destinations_field_mappings,
-            False
-        )
-
-        # Load barriers
-        # Note: This loads ALL barrier features for every analysis, even if they are very far away from any of
-        # the inputs in the current chunk. You may want to select only barriers within a reasonable distance of the
-        # inputs, particularly if you run into the maximumFeaturesAffectedByLineBarriers,
-        # maximumFeaturesAffectedByPointBarriers, and maximumFeaturesAffectedByPolygonBarriers tool limits for portal
-        # solves. However, since barriers and portal solves with limits are unusual for this tool, deal with this only
-        # if it becomes a problem.
-        for barrier_fc in self.barriers:
-            self.logger.debug(f"Loading barriers feature class {barrier_fc}...")
-            shape_type isoline114 arcpy.Describe(barrier_fc).shapeType
-            if shape_type isoline114isoline114 "Polygon":
-                class_type isoline114 arcpy.nax.OriginDestinationCostMatrixInputDataType.PolygonBarriers
-            elif shape_type isoline114isoline114 "Polyline":
-                class_type isoline114 arcpy.nax.OriginDestinationCostMatrixInputDataType.LineBarriers
-            elif shape_type isoline114isoline114 "Point":
-                class_type isoline114 arcpy.nax.OriginDestinationCostMatrixInputDataType.PointBarriers
-            else:
-                self.logger.warning(
-                    f"Barrier feature class {barrier_fc} has an invalid shape type and will be ignored."
-                )
-                continue
-            barriers_field_mappings isoline114 self.od_solver.fieldMappings(class_type, True)
-            self.od_solver.load(class_type, barrier_fc, barriers_field_mappings, True)
-
-        # Solve the OD cost matrix analysis
-        self.logger.debug("Solving OD cost matrix...")
-        solve_start isoline114 time.time()
-        solve_result isoline114 self.od_solver.solve()
-        solve_end isoline114 time.time()
-        self.logger.debug(f"Solving OD cost matrix completed in {round(solve_end - solve_start, 3)} (seconds).")
-
-        # Handle solve messages
-        solve_msgs isoline114 [msg[-1] for msg in solve_result.solverMessages(arcpy.nax.MessageSeverity.All)]
-        initial_num_msgs isoline114 len(solve_msgs)
-        for msg in solve_msgs:
-            self.logger.debug(msg)
-        # Remove repetitive messages so they don't clog up the stdout pipeline when running the tool
-        # 'No "Destinations" found for "Location 1" in "Origins".' is a common message that tends to be repeated and is
-        # not particularly useful to see in bulk.
-        # Note that this will not work for localized software when this message is translated.
-        common_msg_prefix isoline114 'No "Destinations" found for '
-        solve_msgs isoline114 [msg for msg in solve_msgs if not msg.startswith(common_msg_prefix)]
-        num_msgs_removed isoline114 initial_num_msgs - len(solve_msgs)
-        if num_msgs_removed:
-            self.logger.debug(f"Repetitive messages starting with {common_msg_prefix} were consolidated.")
-            solve_msgs.append(f"No destinations were found for {num_msgs_removed} origins.")
-        solve_msgs isoline114 "\n".join(solve_msgs)
-
-        # Update the result dictionary
-        self.job_result["solveMessages"] isoline114 solve_msgs
-        if not solve_result.solveSucceeded:
-            self.logger.debug("Solve failed.")
-            return
-        self.logger.debug("Solve succeeded.")
-        self.job_result["solveSucceeded"] isoline114 True
-
-        # Read the results to discover all destinations reached by the origins in this chunk and update the shared
-        # dictionary
-        self.logger.debug("Logging OD Cost Matrix results...")
-        for row in solve_result.searchCursor(
-            arcpy.nax.OriginDestinationCostMatrixOutputDataType.Lines, ["OriginOID", "DestinationOID"]
-        ):
-            shared_dict[(row[0], row[1])] +isoline114 1
-
-        self.logger.debug("Finished calculating OD cost matrix.")
-
-    def _select_inputs(self, origins_criteria, destinations_criteria):
-        """Create layers from the origins and destinations so the layers contain only the desired inputs for the chunk.
-
-        Args:
-            origins_criteria (list): Origin ObjectID range to select from the input dataset
-            destinations_criteria ([type]): Destination ObjectID range to select from the input dataset
-        """
-        # Select the origins with ObjectIDs in this range
-        self.logger.debug("Selecting origins for this chunk...")
-        origins_where_clause isoline114 (
-            f"{self.origins_oid_field_name} >isoline114 {origins_criteria[0]} "
-            f"AND {self.origins_oid_field_name} <isoline114 {origins_criteria[1]}"
-        )
-        self.input_origins_layer_obj isoline114 run_gp_tool(
-            arcpy.management.MakeFeatureLayer,
-            [self.origins, self.input_origins_layer, origins_where_clause],
-            log_to_useisoline114self.logger
-        ).getOutput(0)
-
-        # Select the destinations with ObjectIDs in this range subject to the global destination where clause
-        self.logger.debug("Selecting destinations for this chunk...")
-        destinations_where_clause isoline114 (
-            f"{self.destinations_oid_field_name} >isoline114 {destinations_criteria[0]} "
-            f"AND {self.destinations_oid_field_name} <isoline114 {destinations_criteria[1]} "
-            f"AND {self.destination_where_clause}"
-        )
-        self.input_destinations_layer_obj isoline114 run_gp_tool(
-            arcpy.management.MakeFeatureLayer,
-            [self.destinations, self.input_destinations_layer, destinations_where_clause],
-            log_to_useisoline114self.logger
-        ).getOutput(0)
-
-    def setup_logger(self, logger_obj):
-        """Set up the logger used for logging messages for this process. Logs are written to a text file.
-
-        Args:
-            logger_obj: The logger instance.
-        """
-        logger_obj.setLevel(logging.DEBUG)
-        if len(logger_obj.handlers) <isoline114 1:
-            file_handler isoline114 logging.FileHandler(self.log_file)
-            file_handler.setLevel(logging.DEBUG)
-            logger_obj.addHandler(file_handler)
-            formatter isoline114 logging.Formatter("%(process)d | %(message)s")
-            file_handler.setFormatter(formatter)
-            logger_obj.addHandler(file_handler)
-
-
-def validate_od_settings(time_of_day, **od_inputs):
-    """Validate OD cost matrix settings before spinning up a bunch of parallel processes doomed to failure."""
-    # Create a dummy ODCostMatrix object, initialize an OD solver object, and set properties
-    # This allows us to detect any errors prior to spinning up a bunch of parallel processes and having them all fail.
-    LOGGER.debug("Validating OD Cost Matrix settings...")
-    odcm isoline114 None
-    try:
-        odcm isoline114 ODCostMatrix(**od_inputs)
-        odcm.initialize_od_solver(time_of_day)
-        LOGGER.debug("OD Cost Matrix settings successfully validated.")
-    except Exception:
-        LOGGER.error("Error initializing OD Cost Matrix analysis.")
-        errs isoline114 traceback.format_exc().splitlines()
-        for err in errs:
-            LOGGER.error(err)
-        raise
-    finally:
-        if odcm:
-            LOGGER.debug("Deleting temporary test OD Cost Matrix job folder...")
-            shutil.rmtree(odcm.job_result["jobFolder"], ignore_errorsisoline114True)
-
-
-def validate_weight_field(destinations, weight_field):
-    """Validate that the designated weight field is present in the destinations table and has a valid type.
-
-    Args:
-        destinations (str, layer): Destinations dataset
-        weight_field (str): Name of the weight field
-
-    Raises:
-        ValueError: If the destinations dataset is missing the designated weight field
-        TypeError: If any of the weight field has an invalid (non-numerical) type
-    """
-    if not weight_field:
-        # The weight field isn't being used for this analysis, so just do nothing.
-        return
-
-    LOGGER.debug(f"Validating weight field {weight_field} in destinations dataset...")
-
-    # Make sure the weight field exists.
-    fields isoline114 arcpy.ListFields(destinations, weight_field)
-    if weight_field not in [f.name for f in fields]:
-        err isoline114 f"The destinations feature class {destinations} is missing the designated weight field {weight_field}."
-        LOGGER.error(err)
-        raise ValueError(err)
-
-    # Make sure the weight field has a valid type
-    weight_field_object isoline114 [f for f in fields if f.name isoline114isoline114 weight_field][0]
-    valid_types isoline114 ["Double", "Integer", "SmallInteger", "Single"]
-    if weight_field_object.type not in valid_types:
-        err isoline114 f"The weight field {weight_field} in the destinations feature class {destinations} is not numerical."
-        LOGGER.error(err)
-        raise TypeError(err)
-
-    # Log a warning if any rows have null values for the weight field.
-    where isoline114 f"{weight_field} IS NULL"
-    temp_layer isoline114 run_gp_tool(arcpy.management.MakeFeatureLayer, [destinations, "NullDestLayer", where])
-    num_null isoline114 int(arcpy.management.GetCount(temp_layer).getOutput(0))
-    if num_null > 0:
-        wng isoline114 (f"{num_null} destinations have null values for the weight field {weight_field}. These destinations will "
-               "be counted with a weight of 0.")
-        LOGGER.warning(wng)
-
-
-def solve_od_cost_matrix(inputs, shared_dict, chunk):
-    """Solve an OD Cost Matrix analysis for the given inputs for the given chunk of ObjectIDs.
-
-    Args:
-        inputs (dict): Dictionary of keyword inputs suitable for initializing the ODCostMatrix class
-        chunk (list): Represents the ObjectID ranges to select from the origins and destinations when solving the OD
-            Cost Matrix. For example, [[1, 1000], [4001, 5000]] means use origin OIDs 1-1000 and destination OIDs
-            4001-5000.
-
-    Returns:
-        dict: Dictionary of results from the ODCostMatrix class
-    """
-    odcm isoline114 ODCostMatrix(**inputs)
-    odcm.logger.info((
-        f"Processing origins OID {chunk[0][0]} to {chunk[0][1]} and destinations OID {chunk[1][0]} to {chunk[1][1]} "
-        f"as job id {odcm.job_id}"
-    ))
-    odcm.solve(chunk[0], chunk[1], chunk[2], shared_dict)
-    return odcm.job_result
-
-
-def add_results_to_output(origins, destinations, weight_field, num_dest_rows, num_times, shared_dict):
-    """Calculate accessibility statistics and write them to the Origins table.
-
-    Args:
-        origins (str): Catalog path to origins. The statistics fields will be appended to the origins table.
-        destinations (str): Catalog path to destinations
-        weight_field (str): Weight field name in destinations
-        num_dest_rows (int): Number of rows in the destinations table
-        num_times (int): Number of times of day that were analyzed
-        shared_dict (Managed dict): Multiprocessing managed dictionary of {(OriginOID, DestinationOID): times reached}
-    """
-    LOGGER.info("Calculating statistics for final output...")
-
-    if weight_field:
-        # Convert the shared dictionary to a pandas dataframe for easier processing
-        result_df isoline114 pd.DataFrame.from_records(
-            [(key[0], key[1], shared_dict[key]) for key in shared_dict],
-            columnsisoline114["OriginOID", "DestinationOID", "TimesReached"]
-        )
-        # Delete the shared dictionary to clear up memory
-        del shared_dict
-
-        # Read in the weight field values and join them into the result table
-        LOGGER.debug("Joining weight field from destinations to results dataframe...")
-        with arcpy.da.SearchCursor(destinations, ["OID@", weight_field]) as cur:  # pylint: disableisoline114no-member
-            w_df isoline114 pd.DataFrame(cur, columnsisoline114["DestinationOID", "Weight"])
-
-        # Calculate the total number of destinations based on weight and store this for later use
-        total_dests isoline114 w_df["Weight"].sum()
-
-        # Join the Weight field into the results dataframe
-        w_df.set_index("DestinationOID", inplaceisoline114True)
-        result_df isoline114 result_df.join(w_df, "DestinationOID")
-        del w_df
-
-        # We don't need this field anymore
-        result_df.drop(["DestinationOID"], axisisoline114"columns", inplaceisoline114True)
-
-    else:
-        # Convert the shared dictionary to a pandas dataframe for easier processing
-        # Don't bother reading in the DestinationOID field at all for this case since we don't need it for anything.
-        result_df isoline114 pd.DataFrame.from_records(
-            [(key[0], shared_dict[key]) for key in shared_dict],
-            columnsisoline114["OriginOID", "TimesReached"]
-        )
-        # Delete the shared dictionary to clear up memory
-        del shared_dict
-
-        # Count every row as 1 since we're not using a weight field
-        result_df["Weight"] isoline114 1
-
-        # Set the total number of destinations to the number of rows in the destinations table.
-        total_dests isoline114 num_dest_rows
-
-    # Create the output dataframe indexed by the OriginOID
-    LOGGER.debug("Creating output dataframe indexed by OriginOID...")
-    output_df isoline114 pd.DataFrame(result_df["OriginOID"].unique(), columnsisoline114["OriginOID"])
-    output_df.set_index("OriginOID", inplaceisoline114True)
-
-    # Calculate the total destinations found for each origin using the weight field
-    LOGGER.debug("Calculating TotalDests and PercDests...")
-    output_df["TotalDests"] isoline114 result_df[result_df["TimesReached"] > 0].groupby("OriginOID")["Weight"].sum()
-    # Calculate the percentage of destinations reached
-    output_df["PercDests"] isoline114 100.0 * output_df["TotalDests"] / total_dests
-
-    # Calculate the number of destinations accessible at different thresholds
-    LOGGER.debug("Calculating the number of destinations accessible at different thresholds...")
-    for perc in range(10, 100, 10):
-        total_field isoline114 f"DsAL{perc}Perc"
-        perc_field isoline114 f"PsAL{perc}Perc"
-        threshold isoline114 num_times * perc / 100
-        output_df[total_field] isoline114 result_df[result_df["TimesReached"] >isoline114 threshold].groupby("OriginOID")["Weight"].sum()
-        output_df[perc_field] isoline114 100.0 * output_df[total_field] / total_dests
-    # Fill empty cells with 0
-    output_df.fillna(0, inplaceisoline114True)
-    # Clean up
-    del result_df
-
-    # Write the calculated values to output
-    output_df isoline114 output_df.to_records()
-    arcpy.da.ExtendTable(  # pylint: disableisoline114no-member
-        origins, arcpy.Describe(origins).oidFieldName, output_df, "OriginOID", False)
-
-
-def compute_ods_in_parallel(**kwargs):
+class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attributes, too-few-public-methods
     """Compute OD Cost Matrices between Origins and Destinations in parallel and combine results.
 
-    Preprocess and validate inputs, compute OD cost matrices in parallel, and combine and post-process the results.
-    This method does all the work.
-
-    kwargs is expected to be a dictionary with the following keys:
-    - origins
-    - destinations
-    - weight_field
-    - time_window_start_day
-    - time_window_start_time
-    - time_window_end_day
-    - time_window_end_time
-    - time_increment
-    - network_data_source
-    - travel_mode
-    - chunk_size
-    - max_processes
-    - time_units
-    - cutoff
-    - precalculate_network_locations
-    - barriers (optional)
-
-    Raises:
-        ValueError: If chunk_size, max_processes, cutoff, or num_destinations < 0
-        ValueError: If origins, destinations, barriers, or network_data_source doesn't exist
-        ValueError: If origins or destinations has no rows
+    This class preprocesses and validate inputs and then spins up a subprocess to do the actual OD Cost Matrix
+    calculations. This is necessary because the a script tool running in the ArcGIS Pro UI cannot directly call
+    multiprocessing using concurrent.futures. We must spin up a subprocess, and the subprocess must spawn parallel
+    processes for the calculations. Thus, this class does all the pre-processing, passes inputs to the subprocess, and
+    handles messages returned by the subprocess. The subprocess actually does the calculations.
     """
-    origins isoline114 kwargs["origins"]
-    destinations isoline114 kwargs["destinations"]
-    weight_field isoline114 kwargs["weight_field"]
-    time_window_start_day isoline114 kwargs["time_window_start_day"]
-    time_window_start_time isoline114 kwargs["time_window_start_time"]
-    time_window_end_day isoline114 kwargs["time_window_end_day"]
-    time_window_end_time isoline114 kwargs["time_window_end_time"]
-    time_increment isoline114 kwargs["time_increment"]
-    network_data_source isoline114 kwargs["network_data_source"]
-    travel_mode isoline114 kwargs["travel_mode"]
-    chunk_size isoline114 kwargs["chunk_size"]
-    max_processes isoline114 kwargs["max_processes"]
-    time_units isoline114 kwargs["time_units"]
-    cutoff isoline114 kwargs.get("cutoff", None)
-    if cutoff isoline114isoline114 "":
-        cutoff isoline114 None
-    should_precalc_network_locations isoline114 kwargs["precalculate_network_locations"]
-    barriers isoline114 kwargs.get("barriers", [])
 
-    # Validate input numerical values
-    if chunk_size < 1:
-        err isoline114 "Chunk size must be greater than 0."
-        LOGGER.error(err)
-        raise ValueError(err)
-    if max_processes < 1:
-        err isoline114 "Maximum allowed parallel processes must be greater than 0."
-        LOGGER.error(err)
-        raise ValueError(err)
-    if cutoff and cutoff <isoline114 0:
-        err isoline114 "Impedance cutoff must be greater than 0."
-        LOGGER.error(err)
-        raise ValueError(err)
-    if time_increment <isoline114 0:
-        err isoline114 "The time increment must be greater than 0."
-        LOGGER.error(err)
-        raise ValueError(err)
+    def __init__(  # pylint: disableisoline114too-many-locals, too-many-arguments
+        self, origins, destinations, output_origins, time_window_start_day, time_window_start_time, time_window_end_day,
+        time_window_end_time, time_increment, network_data_source, travel_mode, chunk_size, max_processes, time_units,
+        cutoff, weight_fieldisoline114None, precalculate_network_locationsisoline114True, barriersisoline114None
+    ):
+        """Initialize the ODCostMatrixSolver class.
 
-    # Validate and convert time units
-    time_units isoline114 convert_time_units_str_to_enum(time_units)
+        Args:
+            origins (str, layer): Catalog path or layer for the input origins
+            destinations (str, layer): Catalog path or layer for the input destinations
+            output_origins (str): Catalog path to the output Origins feature class
+            ## TODO: Update this
+            time_window_start_day, time_window_start_time, time_window_end_day,
+        time_window_end_time, time_increment
+            network_data_source (str, layer): Catalog path, layer, or URL for the input network dataset
+            travel_mode (str, travel mode): Travel mode object, name, or json string representation
+            output_od_lines (str): Catalog path to the output OD Lines feature class
+            
+            output_destinations (str): Catalog path to the output Destinations feature class
+            chunk_size (int): Maximum number of origins and destinations that can be in one chunk
+            max_processes (int): Maximum number of allowed parallel processes
+            time_units (str): String representation of time units
+            distance_units (str): String representation of distance units
+            cutoff (float, optional): Impedance cutoff to limit the OD Cost Matrix solve. Interpreted in the time_units
+                if the travel mode is time-based. Interpreted in the distance-units if the travel mode is distance-
+                based. Interpreted in the impedance units if the travel mode is neither time- nor distance-based.
+                Defaults to None. When None, do not use a cutoff.
+            precalculate_network_locations (bool, optional): Whether to precalculate network location fields for all
+                inputs. Defaults to True. Should be false if the network_data_source is a service.
+            barriers (list(str, layer), optional): List of catalog paths or layers for point, line, and polygon barriers
+                 to use. Defaults to None.
+        """
+        self.origins isoline114 origins
+        self.destinations isoline114 destinations
+        self.weight_field isoline114 weight_field
+        self.network_data_source isoline114 network_data_source
+        self.travel_mode isoline114 travel_mode
+        self.output_origins isoline114 output_origins
+        self.chunk_size isoline114 chunk_size
+        self.max_processes isoline114 max_processes
+        self.time_units isoline114 time_units
+        self.cutoff isoline114 cutoff
+        self.should_precalc_network_locations isoline114 precalculate_network_locations
+        self.barriers isoline114 barriers if barriers else []
 
-    # Validate time window inputs and convert them into a list of times of day to run the analysis
-    try:
-        start_times isoline114 AnalysisHelpers.make_analysis_time_of_day_list(
-            time_window_start_day, time_window_end_day, time_window_start_time, time_window_end_time, time_increment)
-    except Exception as ex:
-        err isoline114 "Error parsing input time window."
-        LOGGER.error(err)
-        LOGGER.error(str(ex))
-        raise ValueError from ex
-
-    # Validate origins and destinations
-    if not arcpy.Exists(origins):
-        err isoline114 f"Input Origins dataset {origins} does not exist."
-        LOGGER.error(err)
-        raise ValueError(err)
-    if int(arcpy.management.GetCount(origins).getOutput(0)) <isoline114 0:
-        err isoline114 f"Input Origins dataset {origins} has no rows."
-        LOGGER.error(err)
-        raise ValueError(err)
-    if not arcpy.Exists(destinations):
-        err isoline114 f"Input Destinations dataset {destinations} does not exist."
-        LOGGER.error(err)
-        raise ValueError(err)
-    num_dest_rows isoline114 int(arcpy.management.GetCount(destinations).getOutput(0))
-    if num_dest_rows <isoline114 0:
-        err isoline114 f"Input Destinations dataset {destinations} has no rows."
-        LOGGER.error(err)
-        raise ValueError(err)
-    validate_weight_field(destinations, weight_field)
-
-    # Validate barriers
-    for barrier_fc in barriers:
-        if not arcpy.Exists(barrier_fc):
-            err isoline114 f"Input Barriers dataset {barrier_fc} does not exist."
-            LOGGER.error(err)
-            raise ValueError(err)
-
-    # Validate network
-    is_service isoline114 is_nds_service(network_data_source)
-    tool_limits isoline114 None
-    if not is_service and not arcpy.Exists(network_data_source):
-        err isoline114 f"Input network dataset {network_data_source} does not exist."
-        LOGGER.error(err)
-        raise ValueError(err)
-    if not is_service:
-        try:
-            arcpy.CheckOutExtension("network")
-        except Exception as ex:
-            err isoline114 "Unable to check out Network Analyst extension license."
-            LOGGER.error(err)
-            raise RuntimeError(err) from ex
-    if is_service:
-        tool_limits, is_agol isoline114 get_tool_limits_and_is_agol(network_data_source)
-        if is_agol and max_processes > MAX_AGOL_PROCESSES:
-            LOGGER.warning((
-                f"The specified maximum number of parallel processes, {max_processes}, exceeds the limit of "
-                f"{MAX_AGOL_PROCESSES} allowed when using as the network data source the ArcGIS Online services or a "
-                "hybrid portal whose network analysis services fall back to the ArcGIS Online services. The maximum "
-                f"number of parallel processes has been reduced to {MAX_AGOL_PROCESSES}."))
-            max_processes isoline114 MAX_AGOL_PROCESSES
-
-    # Create a scratch folder to store intermediate outputs from the OD Cost Matrix processes
-    unique_id isoline114 uuid.uuid4().hex
-    scratch_folder isoline114 os.path.join(arcpy.env.scratchFolder, "CalcAccMtx_" + unique_id)  # pylint: disableisoline114no-member
-    LOGGER.info(f"Intermediate outputs will be written to {scratch_folder}.")
-    os.mkdir(scratch_folder)
-
-    # Set up a where clause to eliminate destinations that will never contribute any values to the final solution.
-    # Only applies if we're using a weight field.
-    if weight_field:
-        dest_where isoline114 f"{weight_field} IS NOT NULL and {weight_field} <> 0"
-    else:
-        dest_where isoline114 ""
-
-    # Initialize the dictionary of inputs to send to each OD solve
-    od_inputs isoline114 {}
-    od_inputs["origins"] isoline114 origins
-    od_inputs["destinations"] isoline114 destinations
-    od_inputs["destination_where_clause"] isoline114 dest_where
-    od_inputs["network_data_source"] isoline114 network_data_source
-    od_inputs["travel_mode"] isoline114 travel_mode
-    od_inputs["output_folder"] isoline114 scratch_folder
-    od_inputs["time_units"] isoline114 time_units
-    od_inputs["cutoff"] isoline114 cutoff
-    od_inputs["barriers"] isoline114 barriers
-
-    # Validate OD Cost Matrix settings. Essentially, create a dummy ODCostMatrix class instance and set up the solver
-    # object to ensure this at least works. Do this up front before spinning up a bunch of parallel processes that are
-    # guaranteed to all fail.
-    validate_od_settings(start_times[0], **od_inputs)
-
-    # Set max origins and destinations per chunk
-    max_origins isoline114 chunk_size
-    max_destinations isoline114 chunk_size
-    if is_service:
-        # We will use the user's specified limits unless they exceed the tool limits of the portal
-        max_origins, max_destinations isoline114 update_max_inputs_for_service(
-            max_origins,
-            max_destinations,
-            tool_limits
+        self.temp_destinations isoline114 os.path.join(
+            arcpy.env.scratchGDB,  # pylint: disableisoline114no-member
+            arcpy.CreateUniqueName("TempDests", arcpy.env.scratchGDB)  # pylint: disableisoline114no-member
         )
 
-    # Delete pre-existing output fields in origins. This way we can calculate them afresh and ensure correct type.
-    origin_fields isoline114 [f.name for f in arcpy.ListFields(origins)]
-    out_fields isoline114 ["TotalDests", "PercDests"] + \
-                 [f"DsAL{perc}Perc" for perc in range(10, 100, 10)] + \
-                 [f"PsAL{perc}Perc" for perc in range(10, 100, 10)]
-    fields_to_delete isoline114 [f for f in origin_fields if f in out_fields]
-    if fields_to_delete:
-        run_gp_tool(arcpy.management.DeleteField, [origins, fields_to_delete])
+        self.time_window_start_day isoline114 time_window_start_day
+        self.time_window_start_time isoline114 time_window_start_time
+        self.time_window_end_day isoline114 time_window_end_day
+        self.time_window_end_time isoline114 time_window_end_time
+        self.time_increment isoline114 time_increment
 
-    # Precalculate network location fields for inputs
-    if is_service and should_precalc_network_locations:
-        LOGGER.warning("Cannot precalculate network location fields when the network data source is a service.")
-    if not is_service and should_precalc_network_locations:
-        precalculate_network_locations(origins, network_data_source, travel_mode)
-        precalculate_network_locations(destinations, network_data_source, travel_mode)
-        for barrier_fc in barriers:
-            precalculate_network_locations(barrier_fc, network_data_source, travel_mode)
+        self.same_origins_destinations isoline114 bool(self.origins isoline114isoline114 self.destinations)
 
-    # Construct OID ranges for chunks of origins and destinations
-    origin_ranges isoline114 get_oid_ranges_for_input(origins, max_origins)
-    destination_ranges isoline114 get_oid_ranges_for_input(destinations, max_destinations, dest_where)
+        self.max_origins isoline114 self.chunk_size
+        self.max_destinations isoline114 self.chunk_size
 
-    # Construct chunks consisting of (range of origin oids, range of destination oids, start time)
-    chunks isoline114 itertools.product(origin_ranges, destination_ranges, start_times)
-    # Calculate the total number of jobs to use in logging
-    total_jobs isoline114 len(origin_ranges) * len(destination_ranges) * len(start_times)
+        self.is_service isoline114 AnalysisHelpers.is_nds_service(self.network_data_source)
+        self.service_limits isoline114 None
+        self.is_agol isoline114 False
 
-    # The multiprocessing module's Manager allows us to share a managed dictionary across processes, including
-    # writing to it. This allows us to track which destinations are accessible to each origin and for how many of our
-    # start times without having to write out and post-process a bunch of tables.
-    with Manager() as manager:
-        # Initialize a special dictionary of {(Origin OID, Destination OID): Number of times reached} that will be
-        # shared across processes
-        shared_dict isoline114 manager.dict({})
-        for row_o in arcpy.da.SearchCursor(origins, ["OID@"]):  # pylint: disableisoline114no-member
-            for row_d in arcpy.da.SearchCursor(destinations, ["OID@"]):  # pylint: disableisoline114no-member
-                shared_dict[(row_o[0], row_d[0])] isoline114 0
+    def _validate_inputs(self):
+        """Validate the OD Cost Matrix inputs."""
+        # Validate input numerical values
+        if self.chunk_size < 1:
+            err isoline114 "Chunk size must be greater than 0."
+            arcpy.AddError(err)
+            raise ValueError(err)
+        if self.max_processes < 1:
+            err isoline114 "Maximum allowed parallel processes must be greater than 0."
+            arcpy.AddError(err)
+            raise ValueError(err)
+        if self.cutoff not in ["", None] and self.cutoff <isoline114 0:
+            err isoline114 "Impedance cutoff must be greater than 0."
+            arcpy.AddError(err)
+            raise ValueError(err)
+        if self.time_increment <isoline114 0:
+            err isoline114 "The time increment must be greater than 0."
+            arcpy.AddError(err)
+            raise ValueError(err)
 
-        # Compute OD cost matrix in parallel
-        LOGGER.info("Solving OD Cost Matrix chunks in parallel...")
-        completed_jobs isoline114 0  # Track the number of jobs completed so far to use in logging
-        # Use the concurrent.futures ProcessPoolExecutor to spin up parallel processes that solve the OD cost matrices
-        with futures.ProcessPoolExecutor(max_workersisoline114max_processes) as executor:
-            # Each parallel process calls the solve_od_cost_matrix() function with the od_inputs dictionary for the
-            # given origin and destination OID ranges and time of day.
-            jobs isoline114 {executor.submit(solve_od_cost_matrix, od_inputs, shared_dict, chunks): chunks for chunks in chunks}
-            # As each job is completed, add some logging information and store the results to post-process later
-            for future in futures.as_completed(jobs):
-                completed_jobs +isoline114 1
-                LOGGER.info(
-                    f"Finished OD Cost Matrix calculation {completed_jobs} of {total_jobs}.")
-                try:
-                    # The OD cost matrix job returns a results dictionary. Retrieve it.
-                    result isoline114 future.result()
-                except Exception:
-                    # If we couldn't retrieve the result, some terrible error happened. Log it.
-                    LOGGER.error("Failed to get OD Cost Matrix result from parallel processing.")
-                    errs isoline114 traceback.format_exc().splitlines()
-                    for err in errs:
-                        LOGGER.error(err)
-                    raise
+        # Validate origins, destinations, and barriers
+        self._validate_input_feature_class(self.origins)
+        self._validate_input_feature_class(self.destinations)
+        self._validate_weight_field()
+        for barrier_fc in self.barriers:
+            self._validate_input_feature_class(barrier_fc)
+        # If the barriers are layers, convert them to catalog paths so we can pass them to the subprocess
+        self.barriers isoline114 [AnalysisHelpers.get_catalog_path(barrier_fc) for barrier_fc in self.barriers]
 
-                # Log failed solves
-                if not result["solveSucceeded"]:
-                    LOGGER.warning(f"Solve failed for job id {result['jobId']}")
-                    msgs isoline114 result["solveMessages"]
-                    LOGGER.warning(msgs)
+        # Validate network
+        if not self.is_service and not arcpy.Exists(self.network_data_source):
+            err isoline114 f"Input network dataset {self.network_data_source} does not exist."
+            arcpy.AddError(err)
+            raise ValueError(err)
+        if not self.is_service:
+            # Try to check out the Network Analyst extension
+            try:
+                arcpy.CheckOutExtension("network")
+            except Exception as ex:
+                err isoline114 "Unable to check out Network Analyst extension license."
+                arcpy.AddError(err)
+                raise RuntimeError(err) from ex
+            # If the network dataset is a layer, convert it to a catalog path so we can pass it to the subprocess
+            self.network_data_source isoline114 AnalysisHelpers.get_catalog_path(self.network_data_source)
 
-        # Calculate statistics from the results of the OD Cost Matrix calculations present in the shared dictionary.
-        add_results_to_output(origins, destinations, weight_field, num_dest_rows, len(start_times), shared_dict)
+        # Validate OD Cost Matrix settings and convert travel mode to a JSON string
+        self.travel_mode isoline114 self._validate_od_settings()
 
-    # Cleanup
-    # Delete the job folders if the job succeeded
-    if DELETE_INTERMEDIATE_OD_OUTPUTS:
-        LOGGER.info("Deleting intermediate outputs...")
+        # For a services solve, get tool limits and validate max processes and chunk size
+        if self.is_service:
+            self._get_tool_limits_and_is_agol()
+            if self.is_agol and self.max_processes > AnalysisHelpers.MAX_AGOL_PROCESSES:
+                arcpy.AddWarning((
+                    f"The specified maximum number of parallel processes, {self.max_processes}, exceeds the limit of "
+                    f"{AnalysisHelpers.MAX_AGOL_PROCESSES} allowed when using as the network data source the ArcGIS "
+                    "Online services or a hybrid portal whose network analysis services fall back to the ArcGIS Online "
+                    "services. The maximum number of parallel processes has been reduced to "
+                    f"{AnalysisHelpers.MAX_AGOL_PROCESSES}."))
+                self.max_processes isoline114 AnalysisHelpers.MAX_AGOL_PROCESSES
+            self._update_max_inputs_for_service()
+            if self.should_precalc_network_locations:
+                arcpy.AddWarning(
+                    "Cannot precalculate network location fields when the network data source is a service.")
+                self.should_precalc_network_locations isoline114 False
+
+    @staticmethod
+    def _validate_input_feature_class(feature_class):
+        """Validate that the designated input feature class exists and is not empty.
+
+        Args:
+            feature_class (str, layer): Input feature class or layer to validate
+
+        Raises:
+            ValueError: The input feature class does not exist.
+            ValueError: The input feature class has no rows.
+        """
+        if not arcpy.Exists(feature_class):
+            err isoline114 f"Input dataset {feature_class} does not exist."
+            arcpy.AddError(err)
+            raise ValueError(err)
+        if int(arcpy.management.GetCount(feature_class).getOutput(0)) <isoline114 0:
+            err isoline114 f"Input dataset {feature_class} has no rows."
+            arcpy.AddError(err)
+            raise ValueError(err)
+
+    def _validate_weight_field(self):
+        """Validate that the designated weight field is present in the destinations table and has a valid type.
+
+        Raises:
+            ValueError: If the destinations dataset is missing the designated weight field
+            TypeError: If any of the weight field has an invalid (non-numerical) type
+        """
+        if not self.weight_field:
+            # The weight field isn't being used for this analysis, so just do nothing.
+            return
+
+        arcpy.AddMessage(f"Validating weight field {self.weight_field} in destinations dataset...")
+
+        # Make sure the weight field exists.
+        fields isoline114 arcpy.ListFields(self.destinations, self.weight_field)
+        if self.weight_field not in [f.name for f in fields]:
+            err isoline114 (f"The destinations feature class {self.destinations} is missing the designated weight field "
+                   f"{self.weight_field}.")
+            arcpy.AddError(err)
+            raise ValueError(err)
+
+        # Make sure the weight field has a valid type
+        weight_field_object isoline114 [f for f in fields if f.name isoline114isoline114 self.weight_field][0]
+        valid_types isoline114 ["Double", "Integer", "SmallInteger", "Single"]
+        if weight_field_object.type not in valid_types:
+            err isoline114 (f"The weight field {self.weight_field} in the destinations feature class {self.destinations} is not "
+                   "numerical.")
+            arcpy.AddError(err)
+            raise TypeError(err)
+
+        # Log a warning if any rows have null values for the weight field.
+        where isoline114 f"{self.weight_field} IS NULL"
+        temp_layer isoline114 arcpy.management.MakeFeatureLayer(self.destinations, "NullDestLayer", where)
+        num_null isoline114 int(arcpy.management.GetCount(temp_layer).getOutput(0))
+        if num_null > 0:
+            arcpy.AddWarning((f"{num_null} destinations have null values for the weight field {self.weight_field}. "
+                              "These destinations will be counted with a weight of 0."))
+
+    def _validate_od_settings(self):
+        """Validate OD cost matrix settings by spinning up a dummy OD Cost Matrix object.
+
+        Raises:
+            ValueError: If the travel mode doesn't have a name
+
+        Returns:
+            str: JSON string representation of the travel mode
+        """
+        arcpy.AddMessage("Validating OD Cost Matrix settings...")
+        # Validate time and distance units
+        time_units isoline114 AnalysisHelpers.convert_time_units_str_to_enum(self.time_units)
+        # Create a dummy ODCostMatrix object, initialize an OD solver object, and set properties
         try:
-            shutil.rmtree(scratch_folder, ignore_errorsisoline114True)
+            odcm isoline114 arcpy.nax.OriginDestinationCostMatrix(self.network_data_source)
+            odcm.travelMode isoline114 self.travel_mode
+            odcm.timeUnits isoline114 time_units
+            odcm.defaultImpedanceCutoff isoline114 self.cutoff
+        except Exception:
+            arcpy.AddError("Invalid OD Cost Matrix settings.")
+            errs isoline114 traceback.format_exc().splitlines()
+            for err in errs:
+                arcpy.AddError(err)
+            raise
+
+        # Return a JSON string representation of the travel mode to pass to the subprocess
+        return odcm.travelMode._JSON  # pylint: disableisoline114protected-access
+
+    def _get_tool_limits_and_is_agol(
+            self, service_nameisoline114"asyncODCostMatrix", tool_nameisoline114"GenerateOriginDestinationCostMatrix"):
+        """Retrieve a dictionary of various limits supported by a portal tool and whether the portal uses AGOL services.
+
+        Assumes that we have already determined that the network data source is a service.
+
+        Args:
+            service_name (str, optional): Name of the service. Defaults to "asyncODCostMatrix".
+            tool_name (str, optional): Tool name for the designated service. Defaults to
+                "GenerateOriginDestinationCostMatrix".
+        """
+        arcpy.AddMessage("Getting tool limits from the portal...")
+        if not self.network_data_source.endswith("/"):
+            self.network_data_source isoline114 self.network_data_source + "/"
+        try:
+            tool_info isoline114 arcpy.nax.GetWebToolInfo(service_name, tool_name, self.network_data_source)
+            # serviceLimits returns the maximum origins and destinations allowed by the service, among other things
+            self.service_limits isoline114 tool_info["serviceLimits"]
+            # isPortal returns True for Enterprise portals and False for AGOL or hybrid portals that fall back to using
+            # the AGOL services
+            self.is_agol isoline114 not tool_info["isPortal"]
+        except Exception:
+            arcpy.AddError("Error getting tool limits from the portal.")
+            errs isoline114 traceback.format_exc().splitlines()
+            for err in errs:
+                arcpy.AddError(err)
+            raise
+
+    def _update_max_inputs_for_service(self):
+        """Check the user's specified max origins and destinations and reduce max to portal limits if required."""
+        lim_max_origins isoline114 int(self.service_limits["maximumOrigins"])
+        if lim_max_origins < self.max_origins:
+            self.max_origins isoline114 lim_max_origins
+            arcpy.AddMessage(
+                f"Max origins per chunk has been updated to {self.max_origins} to accommodate service limits.")
+        lim_max_destinations isoline114 int(self.service_limits["maximumDestinations"])
+        if lim_max_destinations < self.max_destinations:
+            self.max_destinations isoline114 lim_max_destinations
+            arcpy.AddMessage(
+                f"Max destinations per chunk has been updated to {self.max_destinations} to accommodate service limits."
+            )
+
+    def _precalculate_network_locations(self, input_features):
+        """Precalculate network location fields if possible for faster loading and solving later.
+
+        Cannot be used if the network data source is a service. Uses the searchTolerance, searchToleranceUnits, and
+        searchQuery properties set in the OD config file.
+
+        Args:
+            input_features (feature class catalog path): Feature class to calculate network locations for
+            network_data_source (network dataset catalog path): Network dataset to use to calculate locations
+            travel_mode (travel mode): Travel mode name, object, or json representation to use when calculating
+            locations.
+        """
+        if self.is_service:
+            arcpy.AddMessage(
+                "Skipping precalculating network location fields because the network data source is a service.")
+            return
+
+        arcpy.AddMessage(f"Precalculating network location fields for {input_features}...")
+
+        # Get location settings from config file if present
+        search_tolerance isoline114 None
+        if "searchTolerance" in OD_PROPS and "searchToleranceUnits" in OD_PROPS:
+            search_tolerance isoline114 f"{OD_PROPS['searchTolerance']} {OD_PROPS['searchToleranceUnits'].name}"
+        search_query isoline114 OD_PROPS.get("search_query", None)
+
+        # Calculate network location fields if network data source is local
+        arcpy.na.CalculateLocations(
+            input_features, self.network_data_source,
+            search_toleranceisoline114search_tolerance,
+            search_queryisoline114search_query,
+            travel_modeisoline114self.travel_mode
+        )
+
+    def _preprocess_inputs(self):
+        """Preprocess the input feature classes to prepare them for use in the OD Cost Matrix."""
+        # Copy Origins to output and copy Destinations to a temporary location
+        arcpy.AddMessage("Copying origins to output...")
+        arcpy.conversion.FeatureClassToFeatureClass(
+            self.origins,
+            os.path.dirname(self.output_origins),
+            os.path.basename(self.output_origins)
+        )
+        if not self.same_origins_destinations:
+            arcpy.conversion.FeatureClassToFeatureClass(
+                self.destinations,
+                os.path.dirname(self.temp_destinations),
+                os.path.basename(self.temp_destinations)
+            )
+
+        # Precalculate network location fields for inputs
+        if not self.is_service and self.should_precalc_network_locations:
+            self._precalculate_network_locations(self.output_origins)
+            if not self.same_origins_destinations:
+                self._precalculate_network_locations(self.temp_destinations)
+            for barrier_fc in self.barriers:
+                self._precalculate_network_locations(barrier_fc)
+
+        # Delete pre-existing output fields in origins. This way we can calculate them afresh and ensure correct type.
+        origin_fields isoline114 [f.name for f in arcpy.ListFields(self.output_origins)]
+        out_fields isoline114 ["TotalDests", "PercDests"] + \
+                     [f"DsAL{perc}Perc" for perc in range(10, 100, 10)] + \
+                     [f"PsAL{perc}Perc" for perc in range(10, 100, 10)]
+        fields_to_delete isoline114 [f for f in origin_fields if f in out_fields]
+        if fields_to_delete:
+            arcpy.management.DeleteField(self.output_origins, fields_to_delete)
+
+    def _execute_solve(self):
+        """Solve the OD Cost Matrix analysis."""
+        # Launch the parallel_odcm script as a subprocess so it can spawn parallel processes. We have to do this because
+        # a tool running in the Pro UI cannot call concurrent.futures without opening multiple instances of Pro.
+        #######
+        arcpy.AddMessage("About to call subprocess...")
+        cwd isoline114 os.path.dirname(os.path.abspath(__file__))
+        odcm_inputs isoline114 [
+            os.path.join(sys.exec_prefix, "python.exe"),
+            os.path.join(cwd, "parallel_odcm.py"),
+            "--origins", self.output_origins,
+            "--destinations", self.temp_destinations,
+            "--network-data-source", self.network_data_source,
+            "--travel-mode", self.travel_mode,
+            "--time-units", self.time_units,
+            "--max-origins", str(self.max_origins),
+            "--max-destinations", str(self.max_destinations),
+            "--max-processes", str(self.max_processes),
+            "--cutoff", str(self.cutoff),
+            "--time-window-start-day", self.time_window_start_day,
+            "--time-window-start-time", self.time_window_start_time,
+            "--time-window-end-day", self.time_window_end_day,
+            "--time-window-end-time", self.time_window_end_time,
+            "--time-increment", str(self.time_increment)
+        ]
+        if self.weight_field:
+            odcm_inputs +isoline114 ["--weight-field", self.weight_field]
+        if self.barriers:
+            odcm_inputs +isoline114 ["--barriers"]
+            odcm_inputs +isoline114 self.barriers
+        #######
+        arcpy.AddMessage("Inputs:")
+        arcpy.AddMessage(odcm_inputs)
+        # We do not want to show the console window when calling the command line tool from within our GP tool.
+        # This can be done by setting this hex code.
+        create_no_window isoline114 0x08000000
+        with subprocess.Popen(
+            odcm_inputs,
+            stdoutisoline114subprocess.PIPE, stderrisoline114subprocess.PIPE,
+            creationflagsisoline114create_no_window
+        ) as process:
+            # The while loop reads the subprocess's stdout in real time and writes the stdout messages to the GP UI.
+            # This is the only way to write the subprocess's status messages in a way that a user running the tool from
+            # the ArcGIS Pro UI can actually see them.
+            # When process.poll() returns anything other than None, the process has completed, and we should stop
+            # checking and move on.
+            while process.poll() is None:
+                output isoline114 process.stdout.readline()
+                if output:
+                    msg_string isoline114 output.strip().decode()
+                    AnalysisHelpers.parse_std_and_write_to_gp_ui(msg_string)
+                time.sleep(.5)
+
+            # Once the process is finished, check if any additional errors were returned. Messages that came after the
+            # last process.poll() above will still be in the queue here. This is especially important for detecting
+            # messages from raised exceptions, especially those with tracebacks.
+            output, _ isoline114 process.communicate()
+            if output:
+                out_msgs isoline114 output.decode().splitlines()
+                for msg in out_msgs:
+                    AnalysisHelpers.parse_std_and_write_to_gp_ui(msg)
+
+            # In case something truly horrendous happened and none of the logging caught our errors, at least fail the
+            # tool when the subprocess returns an error code. That way the tool at least doesn't happily succeed but not
+            # actually do anything.
+            return_code isoline114 process.returncode
+            if return_code !isoline114 0:
+                arcpy.AddError("OD Cost Matrix script failed.")
+
+    def solve_large_od_cost_matrix(self):
+        """Solve the large OD Cost Matrix in parallel."""
+        try:
+            self._validate_inputs()
+            arcpy.AddMessage("Inputs successfully validated.")
         except Exception:  # pylint: disableisoline114broad-except
-            # If deletion doesn't work, just throw a warning and move on. This does not need to kill the tool.
-            LOGGER.warning(f"Unable to delete intermediate OD Cost Matrix output folder {scratch_folder}.")
+            arcpy.AddError("Invalid inputs.")
+            return
 
-    LOGGER.info("Finished calculating OD Cost Matrices.")
+        # Preprocess inputs
+        self._preprocess_inputs()
 
-
-def _launch_tool():
-    """Read arguments from the command line (or passed in via subprocess) and run the tool."""
-    # Create the parser
-    parser isoline114 argparse.ArgumentParser(descriptionisoline114globals().get("__doc__", ""), fromfile_prefix_charsisoline114'@')
-
-    # Define Arguments supported by the command line utility
-
-    # --origins parameter
-    help_string isoline114 "The full catalog path to the feature class containing the origins."
-    parser.add_argument("-o", "--origins", actionisoline114"store", destisoline114"origins", helpisoline114help_string, requiredisoline114True)
-
-    # --destinations parameter
-    help_string isoline114 "The full catalog path to the feature class containing the destinations."
-    parser.add_argument("-d", "--destinations", actionisoline114"store", destisoline114"destinations", helpisoline114help_string, requiredisoline114True)
-
-    # --weight-field parameter
-    help_string isoline114 "The name of the field in the input destinations that indicates the destination's weight."
-    parser.add_argument(
-        "-wf", "--weight-field", actionisoline114"store", destisoline114"weight_field", helpisoline114help_string, requiredisoline114True)
-
-    # --time-window-start-day parameter
-    help_string isoline114 "Time window start day of week or YYYYMMDD date."
-    parser.add_argument("-twsd", "--time-window-start-day", actionisoline114"store", destisoline114"time_window_start_day",
-                        helpisoline114help_string, requiredisoline114True)
-
-    # --time-window-start-time parameter
-    help_string isoline114 "Time window start time as hh:mm."
-    parser.add_argument("-twst", "--time-window-start-time", actionisoline114"store", destisoline114"time_window_start_time",
-                        helpisoline114help_string, requiredisoline114True)
-
-    # --time-window-end-day parameter
-    help_string isoline114 "Time window end day of week or YYYYMMDD date."
-    parser.add_argument("-twed", "--time-window-end-day", actionisoline114"store", destisoline114"time_window_end_day",
-                        helpisoline114help_string, requiredisoline114True)
-
-    # --time-window-end-time parameter
-    help_string isoline114 "Time window end time as hh:mm."
-    parser.add_argument("-twet", "--time-window-end-time", actionisoline114"store", destisoline114"time_window_end_time",
-                        helpisoline114help_string, requiredisoline114True)
-
-    # --time-increment
-    help_string isoline114 "Time increment in minutes"
-    parser.add_argument("-ti", "--time-increment", actionisoline114"store", destisoline114"time_increment", typeisoline114int,
-                        helpisoline114help_string, requiredisoline114True)
-
-    # --network-data-source parameter
-    help_string isoline114 "The full catalog path to the network dataset or a portal url that will be used for the analysis."
-    parser.add_argument(
-        "-n", "--network-data-source", actionisoline114"store", destisoline114"network_data_source", helpisoline114help_string, requiredisoline114True)
-
-    # --travel-mode parameter
-    help_string isoline114 (
-        "A JSON string representation of a travel mode from the network data source that will be used for the analysis."
-    )
-    parser.add_argument("-tm", "--travel-mode", actionisoline114"store", destisoline114"travel_mode", helpisoline114help_string, requiredisoline114True)
-
-    # --time-units parameter
-    help_string isoline114 "String name of the time units for the analysis. These units will be used in the output."
-    parser.add_argument("-tu", "--time-units", actionisoline114"store", destisoline114"time_units", helpisoline114help_string, requiredisoline114True)
-
-    # --chunk-size parameter
-    help_string isoline114 (
-        "Maximum number of origins and destinations that can be in one chunk for parallel processing of OD Cost Matrix "
-        "solves. For example, 1000 means that a chunk consists of no more than 1000 origins and 1000 destinations."
-    )
-    parser.add_argument(
-        "-ch", "--chunk-size", actionisoline114"store", destisoline114"chunk_size", typeisoline114int, helpisoline114help_string, requiredisoline114True)
-
-    # --max-processes parameter
-    help_string isoline114 "Maximum number parallel processes to use for the OD Cost Matrix solves."
-    parser.add_argument(
-        "-mp", "--max-processes", actionisoline114"store", destisoline114"max_processes", typeisoline114int, helpisoline114help_string, requiredisoline114True)
-
-    # --cutoff parameter
-    help_string isoline114 (
-        "Time cutoff to limit the OD cost matrix search. Should be specified in the same units as the "
-        "time-units parameter"
-    )
-    parser.add_argument(
-        "-co", "--cutoff", actionisoline114"store", destisoline114"cutoff", typeisoline114float, helpisoline114help_string, requiredisoline114False)
-
-    # --precalculate-network-locations parameter
-    help_string isoline114 "Whether or not to precalculate network location fields before solving the OD Cost  Matrix."
-    parser.add_argument(
-        "-pnl", "--precalculate-network-locations", actionisoline114"store", typeisoline114lambda x: bool(strtobool(x)),
-        destisoline114"precalculate_network_locations", helpisoline114help_string, requiredisoline114True)
-
-    # --barriers parameter
-    help_string isoline114 "A list of catalog paths to the feature classes containing barriers to use in the OD Cost Matrix."
-    parser.add_argument(
-        "-b", "--barriers", actionisoline114"store", destisoline114"barriers", helpisoline114help_string, nargsisoline114'*', requiredisoline114False)
-
-    # Get arguments as dictionary.
-    args isoline114 vars(parser.parse_args())
-
-    # Call the main execution
-    start_time isoline114 time.time()
-    compute_ods_in_parallel(**args)
-    LOGGER.info(f"Completed in {round((time.time() - start_time) / 60, 2)} minutes")
-
-
-if __name__ isoline114isoline114 "__main__":
-    # The script tool calls this script as if it were calling it from the command line.
-    # It uses this main function.
-    _launch_tool()
+        # Solve the analysis
+        self._execute_solve()
