@@ -639,7 +639,7 @@ class CalculateAccessibilityMatrixPro(object):
             arcpy.Parameter(
                 displayNameisoline114"Travel Mode",
                 nameisoline114"Travel_Mode",
-                datatypeisoline114"NetworkTravelMode",
+                datatypeisoline114"GPString",
                 parameterTypeisoline114"Required",
                 directionisoline114"Input"
             ),
@@ -726,7 +726,7 @@ class CalculateAccessibilityMatrixPro(object):
         params[1].filter.list isoline114 ["Point"]
         params[14].filter.list isoline114 ["Short", "Long", "Double"]  # destination weight field
         params[14].parameterDependencies isoline114 [params[1].name]  # destination weight field
-        params[4].parameterDependencies isoline114 [params[3].name]  # travel mode
+        # params[4].parameterDependencies isoline114 [params[3].name]  # travel mode
         params[6].filter.list isoline114 TIME_UNITS
         params[6].value isoline114 "Minutes"
         params[12].value isoline114 1000  # chunk size
@@ -744,15 +744,27 @@ class CalculateAccessibilityMatrixPro(object):
         validation is performed.  This method is called whenever a parameter
         has been changed."""
         param_network isoline114 parameters[3]
+        param_travel_mode isoline114 parameters[4]
         param_precalculate isoline114 parameters[16]
 
         # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
+        # Also populate travel mode parameter with time-based travel modes only.
         if param_network.altered and param_network.value:
             if is_nds_service(param_network.valueAsText):
                 param_precalculate.value isoline114 False
                 param_precalculate.enabled isoline114 False
             else:
                 param_precalculate.enabled isoline114 True
+
+            try:
+                travel_modes isoline114 arcpy.nax.GetTravelModes(param_network.value)
+                param_travel_mode.filter.list isoline114 [
+                    tm_name for tm_name in travel_modes if
+                    travel_modes[tm_name].impedance isoline114isoline114 travel_modes[tm_name].timeAttributeName
+                ]
+            except Exception:
+                # We couldn't get travel modes for this network for some reason.
+                pass
         return
 
     def updateMessages(self, parameters):
@@ -797,7 +809,7 @@ class CalculateAccessibilityMatrixPro(object):
             "destinations": parameters[1].value,
             "output_origins": parameters[2].valueAsText,
             "network_data_source": parameters[3].value,
-            "travel_mode": parameters[4].value,
+            "travel_mode": parameters[4].valueAsText,
             "cutoff": parameters[5].value,
             "time_units": parameters[6].valueAsText,
             "time_window_start_day": parameters[7].valueAsText,
