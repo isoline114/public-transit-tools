@@ -1,12 +1,12 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 17 May 2019
+## Last updated: 7 June 2021
 ############################################################################
 ''' Python toolbox that defines all the tools in the Transit Network Analysis Tools tool
 suite.'''
 ################################################################################
-'''Copyright 2019 Esri
+'''Copyright 2021 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -21,6 +21,7 @@ suite.'''
 import os
 import arcpy
 import ToolValidator
+from AnalysisHelpers import isPy3, TIME_UNITS, MAX_AGOL_PROCESSES, is_nds_service
 
 
 class Toolbox(object):
@@ -31,9 +32,10 @@ class Toolbox(object):
         self.alias isoline114 "TransitNetworkAnalysisTools"
 
         # List of tool classes associated with this toolbox
+        cam_tool isoline114 CalculateAccessibilityMatrixPro if isPy3 else CalculateAccessibilityMatrix
         self.tools isoline114 [
             PrepareTimeLapsePolygons,
-            CalculateAccessibilityMatrix,
+            cam_tool,
             CalculateTravelTimeStatistics,
             CreatePercentAccessPolygons
         ]
@@ -460,7 +462,7 @@ class CalculateAccessibilityMatrix(object):
             "total number of destinations reachable at least once as well as the number of destinations reachable at ",
             "least 10%, 20%, ...90% of start times during the time window. The number of reachable destinations can ",
             "be weighted based on a field, such as the number of jobs available at each destination. The tool also ",
-            "calculates the percentage of total destinations reachable."
+            "calculates the percentage of total destinations reachable. (ArcMap layer-based version.)"
         )
         self.canRunInBackground isoline114 True
 
@@ -578,6 +580,251 @@ class CalculateAccessibilityMatrix(object):
             )
         return
 
+
+class CalculateAccessibilityMatrixPro(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label isoline114 "Calculate Accessibility Matrix"
+        self.description isoline114 (
+            "Count the number of destinations reachable from each origin by transit and walking. The tool calculates ",
+            "an Origin-Destination Cost Matrix for each start time within a time window because the reachable ",
+            "destinations change depending on the time of day because of the transit schedules. The output gives the ",
+            "total number of destinations reachable at least once as well as the number of destinations reachable at ",
+            "least 10%, 20%, ...90% of start times during the time window. The number of reachable destinations can ",
+            "be weighted based on a field, such as the number of jobs available at each destination. The tool also ",
+            "calculates the percentage of total destinations reachable. (ArcGIS Pro version with parallelized solves.)"
+        )
+        self.canRunInBackground isoline114 True
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        params isoline114 [
+
+            # 0
+            arcpy.Parameter(
+                displayNameisoline114"Origins",
+                nameisoline114"Origins",
+                datatypeisoline114"GPFeatureLayer",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"),
+
+            # 1
+            arcpy.Parameter(
+                displayNameisoline114"Destinations",
+                nameisoline114"Destinations",
+                datatypeisoline114"GPFeatureLayer",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"),
+
+            # 2
+            arcpy.Parameter(
+                displayNameisoline114"Output Updated Origins",
+                nameisoline114"Output_Updated_Origins",
+                datatypeisoline114"DEFeatureClass",
+                parameterTypeisoline114"Required",
+                directionisoline114"Output"
+            ),
+
+            # 3
+            arcpy.Parameter(
+                displayNameisoline114"Network Data Source",
+                nameisoline114"Network_Data_Source",
+                datatypeisoline114"GPNetworkDataSource",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 4
+            arcpy.Parameter(
+                displayNameisoline114"Travel Mode",
+                nameisoline114"Travel_Mode",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 5
+            arcpy.Parameter(
+                displayNameisoline114"Cutoff Time",
+                nameisoline114"Cutoff_Time",
+                datatypeisoline114"GPDouble",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 6
+            arcpy.Parameter(
+                displayNameisoline114"Cutoff Time Units",
+                nameisoline114"Cutoff_Time_Units",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 7
+            make_parameter(param_startday),
+            # 8
+            make_parameter(param_starttime),
+            # 9
+            make_parameter(param_endday),
+            # 10
+            make_parameter(param_endtime),
+            # 11
+            make_parameter(param_timeinc),
+
+            # 12
+            arcpy.Parameter(
+                displayNameisoline114"Maximum Origins and Destinations per Chunk",
+                nameisoline114"Max_Inputs_Per_Chunk",
+                datatypeisoline114"GPLong",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 13
+            arcpy.Parameter(
+                displayNameisoline114"Maximum Number of Parallel Processes",
+                nameisoline114"Max_Processes",
+                datatypeisoline114"GPLong",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 14
+            arcpy.Parameter(
+                displayNameisoline114"Destinations Weight Field",
+                nameisoline114"Destinations_Weight_Field",
+                datatypeisoline114"Field",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input"),
+
+            # 15
+            arcpy.Parameter(
+                displayNameisoline114"Barriers",
+                nameisoline114"Barriers",
+                datatypeisoline114"GPFeatureLayer",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input",
+                multiValueisoline114True,
+                categoryisoline114"Advanced"
+            ),
+
+            # 16
+            arcpy.Parameter(
+                displayNameisoline114"Precalculate Network Locations",
+                nameisoline114"Precalculate_Network_Locations",
+                datatypeisoline114"GPBoolean",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input",
+                categoryisoline114"Advanced"
+            )
+
+        ]
+
+        params[0].filter.list isoline114 ["Point"]
+        params[1].filter.list isoline114 ["Point"]
+        params[14].filter.list isoline114 ["Short", "Long", "Double"]  # destination weight field
+        params[14].parameterDependencies isoline114 [params[1].name]  # destination weight field
+        # params[4].parameterDependencies isoline114 [params[3].name]  # travel mode
+        params[6].filter.list isoline114 TIME_UNITS
+        params[6].value isoline114 "Minutes"
+        params[12].value isoline114 1000  # chunk size
+        params[13].value isoline114 4  # number of processes
+        params[16].value isoline114 True  # precalculate locations
+
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        param_network isoline114 parameters[3]
+        param_travel_mode isoline114 parameters[4]
+        param_precalculate isoline114 parameters[16]
+
+        # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
+        # Also populate travel mode parameter with time-based travel modes only.
+        if param_network.altered and param_network.value:
+            if is_nds_service(param_network.valueAsText):
+                param_precalculate.value isoline114 False
+                param_precalculate.enabled isoline114 False
+            else:
+                param_precalculate.enabled isoline114 True
+
+            try:
+                travel_modes isoline114 arcpy.nax.GetTravelModes(param_network.value)
+                param_travel_mode.filter.list isoline114 [
+                    tm_name for tm_name in travel_modes if
+                    travel_modes[tm_name].impedance isoline114isoline114 travel_modes[tm_name].timeAttributeName
+                ]
+            except Exception:
+                # We couldn't get travel modes for this network for some reason.
+                pass
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        start_day isoline114 parameters[7]
+        end_day isoline114 parameters[9]
+        start_time isoline114 parameters[8]
+        end_time isoline114 parameters[10]
+        increment isoline114 parameters[11]
+        param_network isoline114 parameters[3]
+        param_max_processes isoline114 parameters[13]
+
+        # Show a filter list of weekdays but also allow YYYYMMDD dates
+        ToolValidator.allow_YYYYMMDD_day(start_day)
+        ToolValidator.validate_day(end_day)
+
+        ToolValidator.set_end_day(start_day, end_day)
+
+        # Make sure time of day format is correct and time window is valid
+        ToolValidator.check_time_window(start_time, end_time, start_day, end_day)
+
+        # Make sure time increment is good
+        ToolValidator.validate_time_increment(increment)
+
+        # If the network data source is arcgis.com, cap max processes
+        if param_max_processes.altered and param_max_processes.value and \
+                param_network.altered and param_network.value:
+            if "arcgis.com" in param_network.valueAsText and param_max_processes.value > MAX_AGOL_PROCESSES:
+                param_max_processes.setErrorMessage((
+                    "The maximum number of parallel processes cannot exceed %i when the "
+                    "ArcGIS Online services are used as the network data source."
+                ) % MAX_AGOL_PROCESSES)
+
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        import CalculateAccessibilityMatrixInParallel
+        od_solver isoline114 CalculateAccessibilityMatrixInParallel.ODCostMatrixSolver(**{
+            "origins": parameters[0].value,
+            "destinations": parameters[1].value,
+            "output_origins": parameters[2].valueAsText,
+            "network_data_source": parameters[3].value,
+            "travel_mode": parameters[4].valueAsText,
+            "cutoff": parameters[5].value,
+            "time_units": parameters[6].valueAsText,
+            "time_window_start_day": parameters[7].valueAsText,
+            "time_window_start_time": parameters[8].valueAsText,
+            "time_window_end_day": parameters[9].valueAsText,
+            "time_window_end_time": parameters[10].valueAsText,
+            "time_increment": parameters[11].value,
+            "chunk_size": parameters[12].value,
+            "max_processes": parameters[13].value,
+            "weight_field": parameters[14].valueAsText if parameters[14].value else None,
+            "barriers": parameters[15].values if parameters[15].values else None,
+            "precalculate_network_locations": parameters[16].value
+        })
+        od_solver.solve_large_od_cost_matrix()
+        return
 
 # region parameters
 
