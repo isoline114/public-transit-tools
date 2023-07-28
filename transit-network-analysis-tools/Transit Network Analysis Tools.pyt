@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 7 June 2021
+## Last updated: 23 July 2021
 ############################################################################
 ''' Python toolbox that defines all the tools in the Transit Network Analysis Tools tool
 suite.'''
@@ -33,8 +33,9 @@ class Toolbox(object):
 
         # List of tool classes associated with this toolbox
         cam_tool isoline114 CalculateAccessibilityMatrixPro if isPy3 else CalculateAccessibilityMatrix
+        ptlp_tool isoline114 PrepareTimeLapsePolygonsPro if isPy3 else PrepareTimeLapsePolygons
         self.tools isoline114 [
-            PrepareTimeLapsePolygons,
+            ptlp_tool,
             cam_tool,
             CalculateTravelTimeStatistics,
             CreatePercentAccessPolygons
@@ -46,8 +47,9 @@ class PrepareTimeLapsePolygons(object):
         """Define the tool (tool name is the name of the class)."""
         self.label isoline114 "Prepare Time Lapse Polygons"
         self.description isoline114 (
-            "Run a Service Area analysis incrementing the time of day. ",
-            "Save the polygons to a feature class that can be used to generate a time lapse video."
+            "Run a Service Area analysis incrementing the time of day over a time window. ",
+            "Save the polygons to a feature class that can be used to generate a time lapse video or run the "
+            "Create Percent Access Polygons tool. (ArcMap layer-based version.)"
         )
         self.canRunInBackground isoline114 True
 
@@ -140,6 +142,253 @@ class PrepareTimeLapsePolygons(object):
             end_time,
             increment
             )
+        return
+
+
+class PrepareTimeLapsePolygonsPro(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label isoline114 "Prepare Time Lapse Polygons"
+        self.description isoline114 (
+            "Run a Service Area analysis incrementing the time of day over a time window. ",
+            "Save the polygons to a feature class that can be used to generate a time lapse video or run the "
+            "Create Percent Access Polygons tool. (ArcGIS Pro version with parallelized solves.)"
+        )
+        self.canRunInBackground isoline114 True
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        params isoline114 [
+
+            # 0
+            arcpy.Parameter(
+                displayNameisoline114"Facilities",
+                nameisoline114"Facilities",
+                datatypeisoline114"GPFeatureLayer",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"),
+
+            # 1
+            arcpy.Parameter(
+                displayNameisoline114"Output Time Lapse Polygons",
+                nameisoline114"Output_Polygons",
+                datatypeisoline114"DEFeatureClass",
+                parameterTypeisoline114"Required",
+                directionisoline114"Output"
+            ),
+
+            # 2
+            arcpy.Parameter(
+                displayNameisoline114"Network Data Source",
+                nameisoline114"Network_Data_Source",
+                datatypeisoline114"GPNetworkDataSource",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 3
+            arcpy.Parameter(
+                displayNameisoline114"Travel Mode",
+                nameisoline114"Travel_Mode",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 4
+            arcpy.Parameter(
+                displayNameisoline114"Cutoff Times",
+                nameisoline114"Cutoff_Times",
+                datatypeisoline114"GPDouble",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input",
+                multiValueisoline114True
+            ),
+
+            # 5
+            arcpy.Parameter(
+                displayNameisoline114"Cutoff Time Units",
+                nameisoline114"Cutoff_Time_Units",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 6
+            make_parameter(param_startday),
+            # 7
+            make_parameter(param_starttime),
+            # 8
+            make_parameter(param_endday),
+            # 9
+            make_parameter(param_endtime),
+            # 10
+            make_parameter(param_timeinc),
+
+            # 11
+            arcpy.Parameter(
+                displayNameisoline114"Travel Direction",
+                nameisoline114"Travel_Direction",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 12
+            arcpy.Parameter(
+                displayNameisoline114"Geometry At Cutoff",
+                nameisoline114"Geometry_At_Cutoff",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 13
+            arcpy.Parameter(
+                displayNameisoline114"Geometry At Overlap",
+                nameisoline114"Geometry_At_Overlap",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 14
+            arcpy.Parameter(
+                displayNameisoline114"Maximum Number of Parallel Processes",
+                nameisoline114"Max_Processes",
+                datatypeisoline114"GPLong",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 15
+            arcpy.Parameter(
+                displayNameisoline114"Barriers",
+                nameisoline114"Barriers",
+                datatypeisoline114"GPFeatureLayer",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input",
+                multiValueisoline114True,
+                categoryisoline114"Advanced"
+            ),
+
+            # 16
+            arcpy.Parameter(
+                displayNameisoline114"Precalculate Network Locations",
+                nameisoline114"Precalculate_Network_Locations",
+                datatypeisoline114"GPBoolean",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input",
+                categoryisoline114"Advanced"
+            )
+
+        ]
+
+        params[0].filter.list isoline114 ["Point"]
+        # params[4].parameterDependencies isoline114 [params[3].name]  # travel mode
+        params[5].filter.list isoline114 TIME_UNITS
+        params[5].value isoline114 "Minutes"
+        params[11].filter.list isoline114 ["Away From Facilities", "Toward Facilities"]
+        params[11].value isoline114 "Away From Facilities"
+        params[12].filter.list isoline114 ["Rings", "Disks"]
+        params[12].value isoline114 "Rings"
+        params[13].filter.list isoline114 ["Overlap", "Dissolve", "Split"]
+        params[13].value isoline114 "Overlap"
+        params[14].value isoline114 4  # number of processes
+        params[16].value isoline114 True  # precalculate locations
+
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        param_network isoline114 parameters[2]
+        param_travel_mode isoline114 parameters[3]
+        param_precalculate isoline114 parameters[16]
+
+        # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
+        # Also populate travel mode parameter with time-based travel modes only.
+        if param_network.altered and param_network.value:
+            if is_nds_service(param_network.valueAsText):
+                param_precalculate.value isoline114 False
+                param_precalculate.enabled isoline114 False
+            else:
+                param_precalculate.enabled isoline114 True
+
+            try:
+                travel_modes isoline114 arcpy.nax.GetTravelModes(param_network.value)
+                param_travel_mode.filter.list isoline114 [
+                    tm_name for tm_name in travel_modes if
+                    travel_modes[tm_name].impedance isoline114isoline114 travel_modes[tm_name].timeAttributeName
+                ]
+            except Exception:
+                # We couldn't get travel modes for this network for some reason.
+                pass
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        start_day isoline114 parameters[6]
+        end_day isoline114 parameters[8]
+        start_time isoline114 parameters[7]
+        end_time isoline114 parameters[9]
+        increment isoline114 parameters[10]
+        param_network isoline114 parameters[2]
+        param_max_processes isoline114 parameters[14]
+
+        # Show a filter list of weekdays but also allow YYYYMMDD dates
+        ToolValidator.allow_YYYYMMDD_day(start_day)
+        ToolValidator.validate_day(end_day)
+
+        ToolValidator.set_end_day(start_day, end_day)
+
+        # Make sure time of day format is correct and time window is valid
+        ToolValidator.check_time_window(start_time, end_time, start_day, end_day)
+
+        # Make sure time increment is good
+        ToolValidator.validate_time_increment(increment)
+
+        # If the network data source is arcgis.com, cap max processes
+        if param_max_processes.altered and param_max_processes.value and \
+                param_network.altered and param_network.value:
+            if "arcgis.com" in param_network.valueAsText and param_max_processes.value > MAX_AGOL_PROCESSES:
+                param_max_processes.setErrorMessage((
+                    "The maximum number of parallel processes cannot exceed %i when the "
+                    "ArcGIS Online services are used as the network data source."
+                ) % MAX_AGOL_PROCESSES)
+
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        import CreateTimeLapsePolygonsInParallel
+        sa_solver isoline114 CreateTimeLapsePolygonsInParallel.ServiceAreaSolver(**{
+            "facilities": parameters[0].value,
+            "output_polygons": parameters[1].valueAsText,
+            "network_data_source": parameters[2].value,
+            "travel_mode": parameters[3].valueAsText,
+            "cutoffs": parameters[4].value,
+            "time_units": parameters[5].valueAsText,
+            "time_window_start_day": parameters[6].valueAsText,
+            "time_window_start_time": parameters[7].valueAsText,
+            "time_window_end_day": parameters[8].valueAsText,
+            "time_window_end_time": parameters[9].valueAsText,
+            "time_increment": parameters[10].value,
+            "travel_direction": parameters[11].valueAsText,
+            "geometry_at_cutoff": parameters[12].valueAsText,
+            "geometry_at_overlap": parameters[13].valueAsText,
+            "max_processes": parameters[14].value,
+            "barriers": parameters[15].values if parameters[15].values else None,
+            "precalculate_network_locations": parameters[16].value
+        })
+        sa_solver.solve_service_areas_in_parallel()
         return
 
 
