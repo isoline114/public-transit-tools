@@ -251,7 +251,7 @@ class ServiceAreaSolver():  # pylint: disableisoline114too-many-instance-attribu
                 "Skipping precalculating network location fields because the network data source is a service.")
             return
 
-        arcpy.AddMessage(f"Precalculating network location fields for {input_features}...")
+        arcpy.AddMessage(f"Precalculating network location fields for facilities...")
 
         # Get location settings from config file if present
         search_tolerance isoline114 None
