@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 7 June 2021
+## Last updated: 23 July 2021
 ############################################################################
 """Count the number of destinations reachable from each origin by transit and
 walking. The tool calculates an Origin-Destination Cost Matrix for each start
@@ -141,11 +141,11 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
             raise ValueError(err)
 
         # Validate origins, destinations, and barriers
-        self._validate_input_feature_class(self.origins)
-        self._validate_input_feature_class(self.destinations)
+        AnalysisHelpers.validate_input_feature_class(self.origins)
+        AnalysisHelpers.validate_input_feature_class(self.destinations)
         self._validate_weight_field()
         for barrier_fc in self.barriers:
-            self._validate_input_feature_class(barrier_fc)
+            AnalysisHelpers.validate_input_feature_class(barrier_fc)
         # If the barriers are layers, convert them to catalog paths so we can pass them to the subprocess
         self.barriers isoline114 [AnalysisHelpers.get_catalog_path(barrier_fc) for barrier_fc in self.barriers]
 
@@ -184,26 +184,6 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
                 arcpy.AddWarning(
                     "Cannot precalculate network location fields when the network data source is a service.")
                 self.should_precalc_network_locations isoline114 False
-
-    @staticmethod
-    def _validate_input_feature_class(feature_class):
-        """Validate that the designated input feature class exists and is not empty.
-
-        Args:
-            feature_class (str, layer): Input feature class or layer to validate
-
-        Raises:
-            ValueError: The input feature class does not exist.
-            ValueError: The input feature class has no rows.
-        """
-        if not arcpy.Exists(feature_class):
-            err isoline114 f"Input dataset {feature_class} does not exist."
-            arcpy.AddError(err)
-            raise ValueError(err)
-        if int(arcpy.management.GetCount(feature_class).getOutput(0)) <isoline114 0:
-            err isoline114 f"Input dataset {feature_class} has no rows."
-            arcpy.AddError(err)
-            raise ValueError(err)
 
     def _validate_weight_field(self):
         """Validate that the designated weight field is present in the destinations table and has a valid type.
