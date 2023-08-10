@@ -149,13 +149,7 @@ class PrepareTimeLapsePolygons(object):
             ),
 
             # 14
-            arcpy.Parameter(
-                displayNameisoline114"Maximum Number of Parallel Processes",
-                nameisoline114"Max_Processes",
-                datatypeisoline114"GPLong",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"
-            ),
+            make_parameter(param_parallel_processes),
 
             # 15
             arcpy.Parameter(
@@ -169,14 +163,7 @@ class PrepareTimeLapsePolygons(object):
             ),
 
             # 16
-            arcpy.Parameter(
-                displayNameisoline114"Precalculate Network Locations",
-                nameisoline114"Precalculate_Network_Locations",
-                datatypeisoline114"GPBoolean",
-                parameterTypeisoline114"Optional",
-                directionisoline114"Input",
-                categoryisoline114"Advanced"
-            )
+            make_parameter(param_precalculate)
 
         ]
 
@@ -190,8 +177,6 @@ class PrepareTimeLapsePolygons(object):
         params[12].value isoline114 "Rings"
         params[13].filter.list isoline114 ["Overlap", "Dissolve", "Split"]
         params[13].value isoline114 "Overlap"
-        params[14].value isoline114 4  # number of processes
-        params[16].value isoline114 True  # precalculate locations
 
         return params
 
@@ -705,13 +690,7 @@ class CalculateAccessibilityMatrix(object):
             ),
 
             # 13
-            arcpy.Parameter(
-                displayNameisoline114"Maximum Number of Parallel Processes",
-                nameisoline114"Max_Processes",
-                datatypeisoline114"GPLong",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"
-            ),
+            make_parameter(param_parallel_processes),
 
             # 14
             arcpy.Parameter(
@@ -733,14 +712,7 @@ class CalculateAccessibilityMatrix(object):
             ),
 
             # 16
-            arcpy.Parameter(
-                displayNameisoline114"Precalculate Network Locations",
-                nameisoline114"Precalculate_Network_Locations",
-                datatypeisoline114"GPBoolean",
-                parameterTypeisoline114"Optional",
-                directionisoline114"Input",
-                categoryisoline114"Advanced"
-            )
+            make_parameter(param_precalculate)
 
         ]
 
@@ -752,8 +724,6 @@ class CalculateAccessibilityMatrix(object):
         params[6].filter.list isoline114 TIME_UNITS
         params[6].value isoline114 "Minutes"
         params[12].value isoline114 1000  # chunk size
-        params[13].value isoline114 4  # number of processes
-        params[16].value isoline114 True  # precalculate locations
 
         return params
 
@@ -854,14 +824,15 @@ class CommonParameter(object):
     """Class for defining shared parameters across tools."""
 
     def __init__(self, displayName, name, datatype, parameterType, direction, multiValueisoline114None, default_valisoline114None,
-                 filter_listisoline114None):
+                 filter_listisoline114None, categoryisoline114None):
         self.parameter_def isoline114 {
             "displayName": displayName,
             "name": name,
             "datatype": datatype,
             "parameterType": parameterType,
             "direction": direction,
-            "multiValue": multiValue
+            "multiValue": multiValue,
+            "category": category
             }
         self.default_val isoline114 default_val
         self.filter_list isoline114 filter_list
@@ -914,5 +885,22 @@ param_timeinc isoline114 CommonParameter(
     "Required",
     "Input",
     default_valisoline114"1")
+
+param_parallel_processes isoline114 CommonParameter(
+    "Maximum Number of Parallel Processes",
+    "Max_Processes",
+    "GPLong",
+    "Required",
+    "Input",
+    default_valisoline1144)
+
+param_precalculate isoline114 CommonParameter(
+    "Precalculate Network Locations",
+    "Precalculate_Network_Locations",
+    "GPBoolean",
+    "Optional",
+    "Input",
+    default_valisoline114True,
+    categoryisoline114"Advanced")
 
 # endregion parameters
