@@ -296,6 +296,7 @@ class CreatePercentAccessPolygons(object):
 
         params isoline114 [
 
+            # 0
             arcpy.Parameter(
                 displayNameisoline114"Input time lapse polygons feature class",
                 nameisoline114"Input_time_lapse_polygons_feature_class",
@@ -303,6 +304,7 @@ class CreatePercentAccessPolygons(object):
                 parameterTypeisoline114"Required",
                 directionisoline114"Input"),
 
+            # 1
             arcpy.Parameter(
                 displayNameisoline114"Output percent access polygons feature class",
                 nameisoline114"Output_percent_access_polygons_feature_class",
@@ -310,6 +312,7 @@ class CreatePercentAccessPolygons(object):
                 parameterTypeisoline114"Required",
                 directionisoline114"Output"),
 
+            # 2
             arcpy.Parameter(
                 displayNameisoline114"Cell size",
                 nameisoline114"Cell_size",
@@ -317,6 +320,7 @@ class CreatePercentAccessPolygons(object):
                 parameterTypeisoline114"Required",
                 directionisoline114"Input"),
 
+            # 3
             arcpy.Parameter(
                 displayNameisoline114"Cell size units",
                 nameisoline114"Cells_size_units",
@@ -324,6 +328,10 @@ class CreatePercentAccessPolygons(object):
                 parameterTypeisoline114"Optional",
                 directionisoline114"Input"),
 
+            # 4
+            make_parameter(param_parallel_processes),
+
+            # 5
             arcpy.Parameter(
                 displayNameisoline114"Output threshold percentage feature class",
                 nameisoline114"Output_threshold_percentage_feature_class",
@@ -331,6 +339,7 @@ class CreatePercentAccessPolygons(object):
                 parameterTypeisoline114"Optional",
                 directionisoline114"Output"),
 
+            # 6
             arcpy.Parameter(
                 displayNameisoline114"Percentage thresholds",
                 nameisoline114"Percentage_thresholds",
@@ -344,8 +353,8 @@ class CreatePercentAccessPolygons(object):
         params[1].symbology isoline114 os.path.join(os.path.dirname(__file__), 'Symbology_Cells.lyr')
         params[2].value isoline114 100
         params[3].enabled isoline114 False
-        params[5].filter.type isoline114 "Range"
-        params[5].filter.list isoline114 [0, 100]
+        params[6].filter.type isoline114 "Range"
+        params[6].filter.list isoline114 [0, 100]
 
         return params
 
@@ -362,8 +371,8 @@ class CreatePercentAccessPolygons(object):
 
         param_in_time_lapse_polys isoline114 parameters[0]
         param_cell_size_units isoline114 parameters[3]
-        param_fc2 isoline114 parameters[4]
-        param_percents isoline114 parameters[5]
+        param_fc2 isoline114 parameters[5]
+        param_percents isoline114 parameters[6]
 
         if param_in_time_lapse_polys.altered and param_in_time_lapse_polys.value:
             in_polys isoline114 param_in_time_lapse_polys.valueAsText
@@ -387,8 +396,8 @@ class CreatePercentAccessPolygons(object):
         param_in_time_lapse_polys isoline114 parameters[0]
         param_cell_size isoline114 parameters[2]
         param_cell_size_units isoline114 parameters[3]
-        param_fc2 isoline114 parameters[4]
-        param_percents isoline114 parameters[5]
+        param_fc2 isoline114 parameters[5]
+        param_percents isoline114 parameters[6]
         required_input_fields isoline114 set(["FacilityID", "Name", "FromBreak", "ToBreak", "TimeOfDay"])
         unit_limits isoline114 {
             "Meter": 5,
@@ -434,13 +443,15 @@ class CreatePercentAccessPolygons(object):
         in_time_lapse_polys isoline114 parameters[0].value
         outfc isoline114 parameters[1].valueAsText
         cell_size isoline114 parameters[2].value
-        fc2 isoline114 parameters[4].valueAsText
-        percents isoline114 parameters[5].values
+        max_processes isoline114 parameters[4].value
+        fc2 isoline114 parameters[5].valueAsText
+        percents isoline114 parameters[6].values
 
         CreatePercentAccessPolygon.main(
             in_time_lapse_polys,
             outfc,
             cell_size,
+            max_processes,
             fc2,
             percents
             )

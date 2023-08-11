@@ -29,7 +29,12 @@ MSG_STR_SPLITTER isoline114 " | "
 TIME_UNITS isoline114 ["Days", "Hours", "Minutes", "Seconds"]
 MAX_AGOL_PROCESSES isoline114 4  # AGOL concurrent processes are limited so as not to overload the service for other users.
 TIME_FIELD isoline114 "TimeOfDay"  # Used for the output of Prepare Time Lapse Polygons
-
+# Create Percent Access Polygons: Field names that must be in the input time lapse polygons
+FACILITY_ID_FIELD isoline114 "FacilityID"
+NAME_FIELD isoline114 "Name"
+FROM_BREAK_FIELD isoline114 "FromBreak"
+TO_BREAK_FIELD isoline114 "ToBreak"
+FIELDS_TO_PRESERVE isoline114 [FACILITY_ID_FIELD, NAME_FIELD, FROM_BREAK_FIELD, TO_BREAK_FIELD]
 
 def validate_input_feature_class(feature_class):
     """Validate that the designated input feature class exists and is not empty.
