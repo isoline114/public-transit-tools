@@ -174,7 +174,7 @@ class PrepareTimeLapsePolygons(object):
         params[11].filter.list isoline114 ["Away From Facilities", "Toward Facilities"]
         params[11].value isoline114 "Away From Facilities"
         params[12].filter.list isoline114 ["Rings", "Disks"]
-        params[12].value isoline114 "Rings"
+        params[12].value isoline114 "Disks"
         params[13].filter.list isoline114 ["Overlap", "Dissolve", "Split"]
         params[13].value isoline114 "Overlap"
 
