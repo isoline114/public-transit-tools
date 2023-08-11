@@ -41,7 +41,7 @@ import AnalysisHelpers
 
 class PercentAccessPolygonCalculator():
     """Main logic for the Create Percent Access Polygons tool.
-    
+
     The tool creates 'typical access polygons' that represent the area reachable by transit across a time window.
 
     The tool attempts to account for the dynamic nature of transit schedules by overlaying service area polygons from
@@ -243,15 +243,13 @@ class PercentAccessPolygonCalculator():
         return temp_output
 
 
-# if __name__ isoline114isoline114 '__main__':
-#     # Feature class of polygons created by the Prepare Time Lapse Polygons tool
-#     # The feature class must be in a projected coordinate system, but this is checked in tool validation
-#     in_time_lapse_polys isoline114 sys.argv[1]
-#     out_cell_counts_fc isoline114 sys.argv[2]
-#     # Raster cell size for output (length or width of cell, not area)
-#     cell_size isoline114 sys.argv[3]
-#     out_percents_fc isoline114 sys.argv[4]
-#     max_processes isoline114 sys.argv[5]
-#     # List of percent of times accessed to summarize in results
-#     percents isoline114 sys.argv[5]
-#     main(in_time_lapse_polys, out_cell_counts_fc, cell_size, max_processes, out_percents_fc, percents)
+if __name__ isoline114isoline114 '__main__':
+    in_time_lapse_polys isoline114 sys.argv[1]
+    out_cell_counts_fc isoline114 sys.argv[2]
+    cell_size_in_meters isoline114 sys.argv[3]
+    max_processes isoline114 sys.argv[4]
+    out_percents_fc isoline114 sys.argv[5]
+    percents isoline114 sys.argv[6]
+    cpap_calculator isoline114 PercentAccessPolygonCalculator(
+            in_time_lapse_polys, out_cell_counts_fc, cell_size_in_meters, max_processes, out_percents_fc, percents)
+    cpap_calculator.execute()
