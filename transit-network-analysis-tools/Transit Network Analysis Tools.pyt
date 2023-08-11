@@ -21,7 +21,7 @@ suite.'''
 import os
 import arcpy
 import ToolValidator
-from AnalysisHelpers import TIME_UNITS, MAX_AGOL_PROCESSES, is_nds_service
+from AnalysisHelpers import TIME_UNITS, MAX_AGOL_PROCESSES, is_nds_service, cell_size_to_meters
 
 
 class Toolbox(object):
@@ -315,23 +315,16 @@ class CreatePercentAccessPolygons(object):
             # 2
             arcpy.Parameter(
                 displayNameisoline114"Cell size",
-                nameisoline114"Cell_size",
-                datatypeisoline114"GPDouble",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"),
+                nameisoline114"cell_size",
+                datatypeisoline114"GPLinearUnit",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input"
+            ),
 
             # 3
-            arcpy.Parameter(
-                displayNameisoline114"Cell size units",
-                nameisoline114"Cells_size_units",
-                datatypeisoline114"GPString",
-                parameterTypeisoline114"Optional",
-                directionisoline114"Input"),
-
-            # 4
             make_parameter(param_parallel_processes),
 
-            # 5
+            # 4
             arcpy.Parameter(
                 displayNameisoline114"Output threshold percentage feature class",
                 nameisoline114"Output_threshold_percentage_feature_class",
@@ -339,7 +332,7 @@ class CreatePercentAccessPolygons(object):
                 parameterTypeisoline114"Optional",
                 directionisoline114"Output"),
 
-            # 6
+            # 5
             arcpy.Parameter(
                 displayNameisoline114"Percentage thresholds",
                 nameisoline114"Percentage_thresholds",
@@ -351,10 +344,10 @@ class CreatePercentAccessPolygons(object):
 
         params[0].filter.list isoline114 ["Polygon"]
         params[1].symbology isoline114 os.path.join(os.path.dirname(__file__), 'Symbology_Cells.lyr')
-        params[2].value isoline114 100
-        params[3].enabled isoline114 False
-        params[6].filter.type isoline114 "Range"
-        params[6].filter.list isoline114 [0, 100]
+        params[2].value isoline114 "100 Meters"
+        params[2].filter.list isoline114 ["Meters", "Kilometers", "Feet", "Yards", "Miles"]
+        params[5].filter.type isoline114 "Range"
+        params[5].filter.list isoline114 [0, 100]
 
         return params
 
@@ -368,18 +361,8 @@ class CreatePercentAccessPolygons(object):
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
         has been changed."""
-
-        param_in_time_lapse_polys isoline114 parameters[0]
-        param_cell_size_units isoline114 parameters[3]
-        param_fc2 isoline114 parameters[5]
-        param_percents isoline114 parameters[6]
-
-        if param_in_time_lapse_polys.altered and param_in_time_lapse_polys.value:
-            in_polys isoline114 param_in_time_lapse_polys.valueAsText
-            if arcpy.Exists(in_polys):
-                SR isoline114 arcpy.Describe(in_polys).spatialReference
-                # Populate the cell size units box with the linear units of the spatial reference
-                param_cell_size_units.value isoline114 SR.linearUnitName
+        param_fc2 isoline114 parameters[4]
+        param_percents isoline114 parameters[5]
 
         # Disable the percent list if no output feature class has been selected
         if param_fc2.value:
@@ -394,10 +377,8 @@ class CreatePercentAccessPolygons(object):
         parameter.  This method is called after internal validation."""
 
         param_in_time_lapse_polys isoline114 parameters[0]
-        param_cell_size isoline114 parameters[2]
-        param_cell_size_units isoline114 parameters[3]
-        param_fc2 isoline114 parameters[5]
-        param_percents isoline114 parameters[6]
+        param_fc2 isoline114 parameters[4]
+        param_percents isoline114 parameters[5]
         required_input_fields isoline114 set(["FacilityID", "Name", "FromBreak", "ToBreak", "TimeOfDay"])
         unit_limits isoline114 {
             "Meter": 5,
@@ -422,12 +403,7 @@ class CreatePercentAccessPolygons(object):
                         str(required_input_fields)
                         )
 
-        # Make sure the cell size is reasonable
-        if param_cell_size.altered and param_cell_size_units.value in unit_limits:
-            if float(param_cell_size.value) < unit_limits[param_cell_size_units.value]:
-                param_cell_size.setWarningMessage(
-                    "Your chosen cell size is very small. The tool may run slowly or run out of memory."
-                )
+        # TODO: Make sure the cell size is reasonable
 
         if param_fc2.value and not param_percents.value:
             param_percents.setWarningMessage(
@@ -440,21 +416,15 @@ class CreatePercentAccessPolygons(object):
     def execute(self, parameters, messages):
         """The source code of the tool."""
         import CreatePercentAccessPolygon
-        in_time_lapse_polys isoline114 parameters[0].value
-        outfc isoline114 parameters[1].valueAsText
-        cell_size isoline114 parameters[2].value
-        max_processes isoline114 parameters[4].value
-        fc2 isoline114 parameters[5].valueAsText
-        percents isoline114 parameters[6].values
-
-        CreatePercentAccessPolygon.main(
-            in_time_lapse_polys,
-            outfc,
-            cell_size,
-            max_processes,
-            fc2,
-            percents
-            )
+        cpap_calculator isoline114 CreatePercentAccessPolygon.PercentAccessPolygonCalculator(
+            parameters[0].value,  # in_time_lapse_polys
+            parameters[1].valueAsText,  # out_cell_counts_fc
+            cell_size_to_meters(parameters[2].valueAsText),  # cell_size_in_meters
+            parameters[3].value,  # max_processes
+            parameters[4].valueAsText,  # out_percents_fc
+            parameters[5].values  # percents
+        )
+        cpap_calculator.execute()
         return
 
 
