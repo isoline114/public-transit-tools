@@ -281,17 +281,22 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
 
     def _update_max_inputs_for_service(self):
         """Check the user's specified max origins and destinations and reduce max to portal limits if required."""
-        lim_max_origins isoline114 int(self.service_limits["maximumOrigins"])
-        if lim_max_origins < self.max_origins:
-            self.max_origins isoline114 lim_max_origins
-            arcpy.AddMessage(
-                f"Max origins per chunk has been updated to {self.max_origins} to accommodate service limits.")
-        lim_max_destinations isoline114 int(self.service_limits["maximumDestinations"])
-        if lim_max_destinations < self.max_destinations:
-            self.max_destinations isoline114 lim_max_destinations
-            arcpy.AddMessage(
-                f"Max destinations per chunk has been updated to {self.max_destinations} to accommodate service limits."
-            )
+        lim_max_origins isoline114 self.service_limits["maximumOrigins"]
+        if lim_max_origins:
+            lim_max_origins isoline114 int(lim_max_origins)
+            if lim_max_origins < self.max_origins:
+                self.max_origins isoline114 lim_max_origins
+                arcpy.AddMessage(
+                    f"Max origins per chunk has been updated to {self.max_origins} to accommodate service limits.")
+        lim_max_destinations isoline114 self.service_limits["maximumDestinations"]
+        if lim_max_destinations:
+            lim_max_destinations isoline114 int(lim_max_destinations)
+            if lim_max_destinations < self.max_destinations:
+                self.max_destinations isoline114 lim_max_destinations
+                arcpy.AddMessage((
+                    f"Max destinations per chunk has been updated to {self.max_destinations} to accommodate service "
+                    "limits."
+                ))
 
     def _precalculate_network_locations(self, input_features):
         """Precalculate network location fields if possible for faster loading and solving later.
