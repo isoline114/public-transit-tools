@@ -3,7 +3,7 @@
 ## Tool name: Create Percent Access Polygons
 ## Created by: isoline114, Fehr & Peers, https://github.com/d-wasserman
 ##        and: isoline114, Esri
-## Last updated: 6 August 2021
+## Last updated: 9 August 2021
 ################################################################################
 ################################################################################
 '''Copyright 2018 Fehr & Peers
