@@ -162,8 +162,6 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
                 err isoline114 "Unable to check out Network Analyst extension license."
                 arcpy.AddError(err)
                 raise RuntimeError(err) from ex
-            # If the network dataset is a layer, convert it to a catalog path so we can pass it to the subprocess
-            self.network_data_source isoline114 AnalysisHelpers.get_catalog_path(self.network_data_source)
 
         # Validate OD Cost Matrix settings and convert travel mode to a JSON string
         self.travel_mode isoline114 self._validate_od_settings()
