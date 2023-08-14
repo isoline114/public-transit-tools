@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 27 July 2021
+## Last updated: 9 August 2021
 ############################################################################
 ''' Python toolbox that defines all the tools in the Transit Network Analysis Tools tool
 suite.'''
@@ -21,7 +21,8 @@ suite.'''
 import os
 import arcpy
 import ToolValidator
-from AnalysisHelpers import isPy3, TIME_UNITS, MAX_AGOL_PROCESSES, is_nds_service
+from AnalysisHelpers import TIME_UNITS, MAX_AGOL_PROCESSES, is_nds_service, cell_size_to_meters, \
+                            get_catalog_path_from_param
 
 
 class Toolbox(object):
@@ -32,11 +33,9 @@ class Toolbox(object):
         self.alias isoline114 "TransitNetworkAnalysisTools"
 
         # List of tool classes associated with this toolbox
-        cam_tool isoline114 CalculateAccessibilityMatrixPro if isPy3 else CalculateAccessibilityMatrix
-        ptlp_tool isoline114 PrepareTimeLapsePolygonsPro if isPy3 else PrepareTimeLapsePolygons
         self.tools isoline114 [
-            ptlp_tool,
-            cam_tool,
+            PrepareTimeLapsePolygons,
+            CalculateAccessibilityMatrix,
             CalculateTravelTimeStatistics,
             CreatePercentAccessPolygons
         ]
@@ -49,110 +48,7 @@ class PrepareTimeLapsePolygons(object):
         self.description isoline114 (
             "Run a Service Area analysis incrementing the time of day over a time window. ",
             "Save the polygons to a feature class that can be used to generate a time lapse video or run the "
-            "Create Percent Access Polygons tool. (ArcMap layer-based version.)"
-        )
-        self.canRunInBackground isoline114 True
-
-    def getParameterInfo(self):
-        """Define parameter definitions"""
-
-        params isoline114 [
-
-            arcpy.Parameter(
-                displayNameisoline114"Service Area Layer",
-                nameisoline114"Service_Area_Layer",
-                datatypeisoline114"GPNALayer",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"),
-
-            arcpy.Parameter(
-                displayNameisoline114"Output Polygons Feature Class",
-                nameisoline114"Output_Polygons_Feature_Class",
-                datatypeisoline114"DEFeatureClass",
-                parameterTypeisoline114"Required",
-                directionisoline114"Output"),
-
-            make_parameter(param_startday),
-            make_parameter(param_starttime),
-            make_parameter(param_endday),
-            make_parameter(param_endtime),
-            make_parameter(param_timeinc)
-        ]
-
-        return params
-
-    def isLicensed(self):
-        """Set whether tool is licensed to execute."""
-        if not arcpy.CheckExtension("network"):
-            return False
-        return True
-
-    def updateParameters(self, parameters):
-        """Modify the values and properties of parameters before internal
-        validation is performed.  This method is called whenever a parameter
-        has been changed."""
-        return
-
-    def updateMessages(self, parameters):
-        """Modify the messages created by internal validation for each tool
-        parameter.  This method is called after internal validation."""
-        start_day isoline114 parameters[2]
-        end_day isoline114 parameters[4]
-        start_time isoline114 parameters[3]
-        end_time isoline114 parameters[5]
-        increment isoline114 parameters[6]
-
-        # Show a filter list of weekdays but also allow YYYYMMDD dates
-        ToolValidator.allow_YYYYMMDD_day(start_day)
-        ToolValidator.validate_day(end_day)
-
-        ToolValidator.set_end_day(start_day, end_day)
-
-        # Make sure time of day format is correct and time window is valid
-        ToolValidator.check_time_window(start_time, end_time, start_day, end_day)
-
-        # Make sure time increment is good
-        ToolValidator.validate_time_increment(increment)
-
-        return
-
-    def execute(self, parameters, messages):
-        """The source code of the tool."""
-        import CreateTimeLapsePolygons
-        SAlayer isoline114 parameters[0].value
-        outfc isoline114 parameters[1].valueAsText
-        start_day isoline114 parameters[2].valueAsText
-        start_time isoline114 parameters[3].valueAsText
-        end_day isoline114 parameters[4].valueAsText
-        end_time isoline114 parameters[5].valueAsText
-        increment isoline114 parameters[6].value
-
-        # For some reason there are problems passing layer objects through in ArcMap when the input is a map layer,
-        # so create a fresh layer object from it.
-        if not ToolValidator.ispy3:
-            if not isinstance(SAlayer, (unicode, str)):
-                SAlayer isoline114 arcpy.mapping.Layer(SAlayer.name)
-
-        CreateTimeLapsePolygons.runTool(
-            SAlayer,
-            outfc,
-            start_day,
-            start_time,
-            end_day,
-            end_time,
-            increment
-            )
-        return
-
-
-class PrepareTimeLapsePolygonsPro(object):
-    def __init__(self):
-        """Define the tool (tool name is the name of the class)."""
-        self.label isoline114 "Prepare Time Lapse Polygons"
-        self.description isoline114 (
-            "Run a Service Area analysis incrementing the time of day over a time window. ",
-            "Save the polygons to a feature class that can be used to generate a time lapse video or run the "
-            "Create Percent Access Polygons tool. (ArcGIS Pro version with parallelized solves.)"
+            "Create Percent Access Polygons tool."
         )
         self.canRunInBackground isoline114 True
 
@@ -254,13 +150,7 @@ class PrepareTimeLapsePolygonsPro(object):
             ),
 
             # 14
-            arcpy.Parameter(
-                displayNameisoline114"Maximum Number of Parallel Processes",
-                nameisoline114"Max_Processes",
-                datatypeisoline114"GPLong",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"
-            ),
+            make_parameter(param_parallel_processes),
 
             # 15
             arcpy.Parameter(
@@ -274,14 +164,7 @@ class PrepareTimeLapsePolygonsPro(object):
             ),
 
             # 16
-            arcpy.Parameter(
-                displayNameisoline114"Precalculate Network Locations",
-                nameisoline114"Precalculate_Network_Locations",
-                datatypeisoline114"GPBoolean",
-                parameterTypeisoline114"Optional",
-                directionisoline114"Input",
-                categoryisoline114"Advanced"
-            )
+            make_parameter(param_precalculate)
 
         ]
 
@@ -292,11 +175,9 @@ class PrepareTimeLapsePolygonsPro(object):
         params[11].filter.list isoline114 ["Away From Facilities", "Toward Facilities"]
         params[11].value isoline114 "Away From Facilities"
         params[12].filter.list isoline114 ["Rings", "Disks"]
-        params[12].value isoline114 "Rings"
+        params[12].value isoline114 "Disks"
         params[13].filter.list isoline114 ["Overlap", "Dissolve", "Split"]
         params[13].value isoline114 "Overlap"
-        params[14].value isoline114 4  # number of processes
-        params[16].value isoline114 True  # precalculate locations
 
         return params
 
@@ -380,7 +261,7 @@ class PrepareTimeLapsePolygonsPro(object):
         sa_solver isoline114 CreateTimeLapsePolygonsInParallel.ServiceAreaSolver(**{
             "facilities": parameters[0].value,
             "output_polygons": parameters[1].valueAsText,
-            "network_data_source": parameters[2].value,
+            "network_data_source": get_catalog_path_from_param(parameters[2]),
             "travel_mode": parameters[3].valueAsText,
             "cutoffs": parameters[4].values,
             "time_units": parameters[5].valueAsText,
@@ -416,6 +297,7 @@ class CreatePercentAccessPolygons(object):
 
         params isoline114 [
 
+            # 0
             arcpy.Parameter(
                 displayNameisoline114"Input time lapse polygons feature class",
                 nameisoline114"Input_time_lapse_polygons_feature_class",
@@ -423,6 +305,7 @@ class CreatePercentAccessPolygons(object):
                 parameterTypeisoline114"Required",
                 directionisoline114"Input"),
 
+            # 1
             arcpy.Parameter(
                 displayNameisoline114"Output percent access polygons feature class",
                 nameisoline114"Output_percent_access_polygons_feature_class",
@@ -430,20 +313,19 @@ class CreatePercentAccessPolygons(object):
                 parameterTypeisoline114"Required",
                 directionisoline114"Output"),
 
+            # 2
             arcpy.Parameter(
                 displayNameisoline114"Cell size",
-                nameisoline114"Cell_size",
-                datatypeisoline114"GPDouble",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"),
-
-            arcpy.Parameter(
-                displayNameisoline114"Cell size units",
-                nameisoline114"Cells_size_units",
-                datatypeisoline114"GPString",
+                nameisoline114"cell_size",
+                datatypeisoline114"GPLinearUnit",
                 parameterTypeisoline114"Optional",
-                directionisoline114"Input"),
+                directionisoline114"Input"
+            ),
 
+            # 3
+            make_parameter(param_parallel_processes),
+
+            # 4
             arcpy.Parameter(
                 displayNameisoline114"Output threshold percentage feature class",
                 nameisoline114"Output_threshold_percentage_feature_class",
@@ -451,6 +333,7 @@ class CreatePercentAccessPolygons(object):
                 parameterTypeisoline114"Optional",
                 directionisoline114"Output"),
 
+            # 5
             arcpy.Parameter(
                 displayNameisoline114"Percentage thresholds",
                 nameisoline114"Percentage_thresholds",
@@ -462,8 +345,8 @@ class CreatePercentAccessPolygons(object):
 
         params[0].filter.list isoline114 ["Polygon"]
         params[1].symbology isoline114 os.path.join(os.path.dirname(__file__), 'Symbology_Cells.lyr')
-        params[2].value isoline114 100
-        params[3].enabled isoline114 False
+        params[2].value isoline114 "100 Meters"
+        params[2].filter.list isoline114 ["Meters", "Kilometers", "Feet", "Yards", "Miles"]
         params[5].filter.type isoline114 "Range"
         params[5].filter.list isoline114 [0, 100]
 
@@ -479,18 +362,8 @@ class CreatePercentAccessPolygons(object):
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
         has been changed."""
-
-        param_in_time_lapse_polys isoline114 parameters[0]
-        param_cell_size_units isoline114 parameters[3]
         param_fc2 isoline114 parameters[4]
         param_percents isoline114 parameters[5]
-
-        if param_in_time_lapse_polys.altered and param_in_time_lapse_polys.value:
-            in_polys isoline114 param_in_time_lapse_polys.valueAsText
-            if arcpy.Exists(in_polys):
-                SR isoline114 arcpy.Describe(in_polys).spatialReference
-                # Populate the cell size units box with the linear units of the spatial reference
-                param_cell_size_units.value isoline114 SR.linearUnitName
 
         # Disable the percent list if no output feature class has been selected
         if param_fc2.value:
@@ -505,8 +378,8 @@ class CreatePercentAccessPolygons(object):
         parameter.  This method is called after internal validation."""
 
         param_in_time_lapse_polys isoline114 parameters[0]
+        param_out_fc isoline114 parameters[1]
         param_cell_size isoline114 parameters[2]
-        param_cell_size_units isoline114 parameters[3]
         param_fc2 isoline114 parameters[4]
         param_percents isoline114 parameters[5]
         required_input_fields isoline114 set(["FacilityID", "Name", "FromBreak", "ToBreak", "TimeOfDay"])
@@ -516,16 +389,25 @@ class CreatePercentAccessPolygons(object):
             "Foot_US": 16.4
         }
 
-        # Make sure the input time lapse polygons are projected and have the correct fields
+        # Add error if the user tries to save output to a shapefile
+        if param_out_fc.altered and param_out_fc.value:
+            out_dir isoline114 os.path.dirname(param_out_fc.valueAsText)
+            if out_dir and os.path.exists(out_dir):
+                desc isoline114 arcpy.Describe(out_dir)
+                if desc.dataType isoline114isoline114 "Folder":
+                    param_out_fc.setErrorMessage("The output cannot be a shapefile.")
+        if param_fc2.altered and param_fc2.value:
+            out_dir isoline114 os.path.dirname(param_fc2.valueAsText)
+            if out_dir and os.path.exists(out_dir):
+                desc isoline114 arcpy.Describe(out_dir)
+                if desc.dataType isoline114isoline114 "Folder":
+                    param_fc2.setErrorMessage("The output cannot be a shapefile.")
+
+        # Make sure the input time lapse polygons have the correct fields
         if param_in_time_lapse_polys.altered and param_in_time_lapse_polys.value:
             in_polys isoline114 param_in_time_lapse_polys.valueAsText
             if arcpy.Exists(in_polys):
                 desc isoline114 arcpy.Describe(in_polys)
-                SR isoline114 desc.spatialReference
-                if SR.type !isoline114 "Projected":
-                    param_in_time_lapse_polys.setErrorMessage(
-                        "Input time lapse polygons must be in a projected coordinate system."
-                        )
                 fields isoline114 set([f.name for f in desc.fields])
                 if not required_input_fields.issubset(fields):
                     param_in_time_lapse_polys.setErrorMessage(
@@ -534,11 +416,10 @@ class CreatePercentAccessPolygons(object):
                         )
 
         # Make sure the cell size is reasonable
-        if param_cell_size.altered and param_cell_size_units.value in unit_limits:
-            if float(param_cell_size.value) < unit_limits[param_cell_size_units.value]:
-                param_cell_size.setWarningMessage(
-                    "Your chosen cell size is very small. The tool may run slowly or run out of memory."
-                )
+        if param_cell_size.altered and param_cell_size.valueAsText:
+            cell_size_in_meters isoline114 cell_size_to_meters(param_cell_size.valueAsText)
+            if cell_size_in_meters < 5 or cell_size_in_meters > 1000:
+                param_cell_size.setErrorMessage("Cell size must be between 5 and 1000 meters.")
 
         if param_fc2.value and not param_percents.value:
             param_percents.setWarningMessage(
@@ -551,19 +432,15 @@ class CreatePercentAccessPolygons(object):
     def execute(self, parameters, messages):
         """The source code of the tool."""
         import CreatePercentAccessPolygon
-        in_time_lapse_polys isoline114 parameters[0].value
-        outfc isoline114 parameters[1].valueAsText
-        cell_size isoline114 parameters[2].value
-        fc2 isoline114 parameters[4].valueAsText
-        percents isoline114 parameters[5].values
-
-        CreatePercentAccessPolygon.main(
-            in_time_lapse_polys,
-            outfc,
-            cell_size,
-            fc2,
-            percents
-            )
+        cpap_calculator isoline114 CreatePercentAccessPolygon.PercentAccessPolygonCalculator(
+            parameters[0].value,  # in_time_lapse_polys
+            parameters[1].valueAsText,  # out_cell_counts_fc
+            cell_size_to_meters(parameters[2].valueAsText),  # cell_size_in_meters
+            parameters[3].value,  # max_processes
+            parameters[4].valueAsText,  # out_percents_fc
+            parameters[5].values  # percents
+        )
+        cpap_calculator.execute()
         return
 
 
@@ -719,137 +596,7 @@ class CalculateAccessibilityMatrix(object):
             "total number of destinations reachable at least once as well as the number of destinations reachable at ",
             "least 10%, 20%, ...90% of start times during the time window. The number of reachable destinations can ",
             "be weighted based on a field, such as the number of jobs available at each destination. The tool also ",
-            "calculates the percentage of total destinations reachable. (ArcMap layer-based version.)"
-        )
-        self.canRunInBackground isoline114 True
-
-    def getParameterInfo(self):
-        """Define parameter definitions"""
-
-        params isoline114 [
-
-            arcpy.Parameter(
-                displayNameisoline114"OD Cost Matrix Layer",
-                nameisoline114"OD_Cost_Matrix_Layer",
-                datatypeisoline114"GPNALayer",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"),
-
-            arcpy.Parameter(
-                displayNameisoline114"Origins",
-                nameisoline114"Origins",
-                datatypeisoline114"GPFeatureLayer",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"),
-
-            arcpy.Parameter(
-                displayNameisoline114"Destinations",
-                nameisoline114"Destinations",
-                datatypeisoline114"GPFeatureLayer",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"),
-
-            arcpy.Parameter(
-                displayNameisoline114"Destinations Weight Field",
-                nameisoline114"Destinations_Weight_Field",
-                datatypeisoline114"Field",
-                parameterTypeisoline114"Optional",
-                directionisoline114"Input"),
-
-            make_parameter(param_startday),
-            make_parameter(param_starttime),
-            make_parameter(param_endday),
-            make_parameter(param_endtime),
-            make_parameter(param_timeinc)
-        ]
-
-        params[1].filter.list isoline114 ["Point"]
-        params[2].filter.list isoline114 ["Point"]
-        params[3].filter.list isoline114 ["Short", "Long", "Double"]
-        params[3].parameterDependencies isoline114 [params[2].name]
-
-        return params
-
-    def isLicensed(self):
-        """Set whether tool is licensed to execute."""
-        if not arcpy.CheckExtension("network"):
-            return False
-        return True
-
-    def updateParameters(self, parameters):
-        """Modify the values and properties of parameters before internal
-        validation is performed.  This method is called whenever a parameter
-        has been changed."""
-        return
-
-    def updateMessages(self, parameters):
-        """Modify the messages created by internal validation for each tool
-        parameter.  This method is called after internal validation."""
-        start_day isoline114 parameters[4]
-        end_day isoline114 parameters[6]
-        start_time isoline114 parameters[5]
-        end_time isoline114 parameters[7]
-        increment isoline114 parameters[8]
-
-        # Show a filter list of weekdays but also allow YYYYMMDD dates
-        ToolValidator.allow_YYYYMMDD_day(start_day)
-        ToolValidator.validate_day(end_day)
-
-        ToolValidator.set_end_day(start_day, end_day)
-
-        # Make sure time of day format is correct and time window is valid
-        ToolValidator.check_time_window(start_time, end_time, start_day, end_day)
-
-        # Make sure time increment is good
-        ToolValidator.validate_time_increment(increment)
-
-        return
-
-    def execute(self, parameters, messages):
-        """The source code of the tool."""
-        import CalculateAccessibility
-        NALayer isoline114 parameters[0].value
-        origins isoline114 parameters[1].value
-        destinations isoline114 parameters[2].value
-        weight_field isoline114 parameters[3].valueAsText
-        start_day isoline114 parameters[4].valueAsText
-        start_time isoline114 parameters[5].valueAsText
-        end_day isoline114 parameters[6].valueAsText
-        end_time isoline114 parameters[7].valueAsText
-        increment isoline114 parameters[8].value
-
-        # For some reason there are problems passing layer objects through in ArcMap when the input is a map layer,
-        # so create a fresh layer object from it.
-        if not ToolValidator.ispy3:
-            if not isinstance(NALayer, (unicode, str)):
-                NALayer isoline114 arcpy.mapping.Layer(NALayer.name)
-
-        CalculateAccessibility.runTool(
-            NALayer,
-            origins,
-            destinations,
-            weight_field,
-            start_day,
-            start_time,
-            end_day,
-            end_time,
-            increment
-            )
-        return
-
-
-class CalculateAccessibilityMatrixPro(object):
-    def __init__(self):
-        """Define the tool (tool name is the name of the class)."""
-        self.label isoline114 "Calculate Accessibility Matrix"
-        self.description isoline114 (
-            "Count the number of destinations reachable from each origin by transit and walking. The tool calculates ",
-            "an Origin-Destination Cost Matrix for each start time within a time window because the reachable ",
-            "destinations change depending on the time of day because of the transit schedules. The output gives the ",
-            "total number of destinations reachable at least once as well as the number of destinations reachable at ",
-            "least 10%, 20%, ...90% of start times during the time window. The number of reachable destinations can ",
-            "be weighted based on a field, such as the number of jobs available at each destination. The tool also ",
-            "calculates the percentage of total destinations reachable. (ArcGIS Pro version with parallelized solves.)"
+            "calculates the percentage of total destinations reachable."
         )
         self.canRunInBackground isoline114 True
 
@@ -940,13 +687,7 @@ class CalculateAccessibilityMatrixPro(object):
             ),
 
             # 13
-            arcpy.Parameter(
-                displayNameisoline114"Maximum Number of Parallel Processes",
-                nameisoline114"Max_Processes",
-                datatypeisoline114"GPLong",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"
-            ),
+            make_parameter(param_parallel_processes),
 
             # 14
             arcpy.Parameter(
@@ -968,14 +709,7 @@ class CalculateAccessibilityMatrixPro(object):
             ),
 
             # 16
-            arcpy.Parameter(
-                displayNameisoline114"Precalculate Network Locations",
-                nameisoline114"Precalculate_Network_Locations",
-                datatypeisoline114"GPBoolean",
-                parameterTypeisoline114"Optional",
-                directionisoline114"Input",
-                categoryisoline114"Advanced"
-            )
+            make_parameter(param_precalculate)
 
         ]
 
@@ -987,8 +721,6 @@ class CalculateAccessibilityMatrixPro(object):
         params[6].filter.list isoline114 TIME_UNITS
         params[6].value isoline114 "Minutes"
         params[12].value isoline114 1000  # chunk size
-        params[13].value isoline114 4  # number of processes
-        params[16].value isoline114 True  # precalculate locations
 
         return params
 
@@ -1065,7 +797,7 @@ class CalculateAccessibilityMatrixPro(object):
             "origins": parameters[0].value,
             "destinations": parameters[1].value,
             "output_origins": parameters[2].valueAsText,
-            "network_data_source": parameters[3].value,
+            "network_data_source": get_catalog_path_from_param(parameters[3]),
             "travel_mode": parameters[4].valueAsText,
             "cutoff": parameters[5].value,
             "time_units": parameters[6].valueAsText,
@@ -1089,14 +821,15 @@ class CommonParameter(object):
     """Class for defining shared parameters across tools."""
 
     def __init__(self, displayName, name, datatype, parameterType, direction, multiValueisoline114None, default_valisoline114None,
-                 filter_listisoline114None):
+                 filter_listisoline114None, categoryisoline114None):
         self.parameter_def isoline114 {
             "displayName": displayName,
             "name": name,
             "datatype": datatype,
             "parameterType": parameterType,
             "direction": direction,
-            "multiValue": multiValue
+            "multiValue": multiValue,
+            "category": category
             }
         self.default_val isoline114 default_val
         self.filter_list isoline114 filter_list
@@ -1149,5 +882,22 @@ param_timeinc isoline114 CommonParameter(
     "Required",
     "Input",
     default_valisoline114"1")
+
+param_parallel_processes isoline114 CommonParameter(
+    "Maximum Number of Parallel Processes",
+    "Max_Processes",
+    "GPLong",
+    "Required",
+    "Input",
+    default_valisoline1144)
+
+param_precalculate isoline114 CommonParameter(
+    "Precalculate Network Locations",
+    "Precalculate_Network_Locations",
+    "GPBoolean",
+    "Optional",
+    "Input",
+    default_valisoline114True,
+    categoryisoline114"Advanced")
 
 # endregion parameters
