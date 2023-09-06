@@ -6,7 +6,7 @@
     <meta charsetisoline114"utf-8">
     <meta contentisoline114"IEisoline114edge" http-equivisoline114"X-UA-Compatible">
     <meta nameisoline114"viewport" contentisoline114"widthisoline114device-width, user-scalableisoline114no">
-    <title>ArcGIS Transit Solution | GTFS in ArcGIS</title>
+    <title>Engage with riders and monitor safety | Public Transit in ArcGIS</title>
     <link relisoline114"shortcut icon" hrefisoline114"/img/favicon.ico">
     <!-- get calcite-web css from the cdn (use latest version) -->
     <link relisoline114"stylesheet" hrefisoline114"https://s3-us-west-1.amazonaws.com/patterns.esri.com/files/calcite-web/1.0.0-rc.7/css/calcite-web.min.css">
@@ -21,12 +21,11 @@
   <div classisoline114"grid-container">
     <div classisoline114"column-24">
       <a classisoline114"skip-to-content" hrefisoline114"#skip-to-content">Skip To Content</a>
-      <a hrefisoline114"./index.html" classisoline114"top-nav-title">Using GTFS Data in ArcGIS</a>
+      <a hrefisoline114"./index.html" classisoline114"top-nav-title">Public Transit Analysis in ArcGIS</a>
       <nav classisoline114"top-nav-list" aria-labelledbyisoline114"topnav">
                 <a classisoline114"top-nav-link" hrefisoline114"./index.html">Home</a>
-        <a classisoline114"top-nav-link is-active" hrefisoline114"./TransitSolution.html">Tools</a>
+        <a classisoline114"top-nav-link is-active" hrefisoline114"./NetworkAnalysis.html">Tools</a>
         <a classisoline114"top-nav-link" hrefisoline114"./resources.html">Resources</a>
-        <a classisoline114"top-nav-link" hrefisoline114"https://github.com/Esri/public-transit-tools" targetisoline114"_blank" relisoline114"noopener">GitHub</a>
       </nav>
     </div>
   </div>
@@ -37,54 +36,60 @@
     <div classisoline114"column-24">
       <h1 classisoline114"sub-nav-title text-white"><span classisoline114"banner-title">Tools</span></h1>
       <select classisoline114"phone-show select-full trailer-half js-select-nav">
-<option valueisoline114"./TransitSolution.html" selected>ArcGIS Transit Solution</option>
-<option valueisoline114"./TransitInArcGISPro.html">Public transit tools in ArcGIS Pro</option>
-<option valueisoline114"./TransitNetworkAnalysisTools.html">Transit Network Analysis Tools</option>
-<option valueisoline114"./BetterBusBuffers.html">BetterBusBuffers</option>
-<option valueisoline114"./InterpolateBlankStopTimes.html">Interpolate Blank Stop Times</option>
-<option valueisoline114"./GTFSRTConnector.html">GTFS Realtime Connector for GeoEvent</option>
-<option valueisoline114"./AddGTFStoaNetworkDataset.html">Add GTFS to a Network Dataset</option>
-<option valueisoline114"./GenerateGTFSShapes.html">Generate GTFS Shapes</option>
-<option valueisoline114"./DisplayGTFSinArcGIS.html">Display GTFS in ArcGIS</option>
-<option valueisoline114"./EditGTFSStopLocations.html">Edit GTFS Stop Locations</option>
+<option valueisoline114"./NetworkAnalysis.html">Model travel by public transit in a network</option>
+<option valueisoline114"./CalculateFrequency.html">Analyze the frequency of transit service</option>
+<option valueisoline114"./VisualizeGTFS.html">Visualize GTFS data in a map</option>
+<option valueisoline114"./EditGTFS.html">Create and edit GTFS data</option>
+<option valueisoline114"./TransitSolution.html" selected>Engage with riders and monitor safety</option>
+<option valueisoline114"./GTFSRTConnector.html">View live GTFS Realtime data</option>
+<option valueisoline114"./DeprecatedTools.html">Deprecated tools</option>
 </select>
 <nav classisoline114"sub-nav-list phone-hide" aria-labelledbyisoline114"subnav">
-<a classisoline114"sub-nav-link is-active" hrefisoline114"./TransitSolution.html">ArcGIS Transit Solution</a>
-<a classisoline114"sub-nav-link" hrefisoline114"./TransitInArcGISPro.html">Public transit tools in ArcGIS Pro</a>
-<a classisoline114"sub-nav-link" hrefisoline114"./TransitNetworkAnalysisTools.html">Transit Network Analysis Tools</a>
-<a classisoline114"sub-nav-link" hrefisoline114"./BetterBusBuffers.html">BetterBusBuffers</a>
-<a classisoline114"sub-nav-link" hrefisoline114"./InterpolateBlankStopTimes.html">Interpolate Blank Stop Times</a>
-<a classisoline114"sub-nav-link" hrefisoline114"./GTFSRTConnector.html">GTFS Realtime Connector for GeoEvent</a>
-<a classisoline114"sub-nav-link" hrefisoline114"./AddGTFStoaNetworkDataset.html">Add GTFS to a Network Dataset</a>
-<a classisoline114"sub-nav-link" hrefisoline114"./GenerateGTFSShapes.html">Generate GTFS Shapes</a>
-<a classisoline114"sub-nav-link" hrefisoline114"./DisplayGTFSinArcGIS.html">Display GTFS in ArcGIS</a>
-<a classisoline114"sub-nav-link" hrefisoline114"./EditGTFSStopLocations.html">Edit GTFS Stop Locations</a>
+<a classisoline114"sub-nav-link" hrefisoline114"./NetworkAnalysis.html">Model travel by public transit in a network</a>
+<a classisoline114"sub-nav-link" hrefisoline114"./CalculateFrequency.html">Analyze the frequency of transit service</a>
+<a classisoline114"sub-nav-link" hrefisoline114"./VisualizeGTFS.html">Visualize GTFS data in a map</a>
+<a classisoline114"sub-nav-link" hrefisoline114"./EditGTFS.html">Create and edit GTFS data</a>
+<a classisoline114"sub-nav-link is-active" hrefisoline114"./TransitSolution.html">Engage with riders and monitor safety</a>
+<a classisoline114"sub-nav-link" hrefisoline114"./GTFSRTConnector.html">View live GTFS Realtime data</a>
+<a classisoline114"sub-nav-link" hrefisoline114"./DeprecatedTools.html">Deprecated tools</a>
 </nav>
     </div>
   </div>
 </header><div classisoline114"grid-container leader-2">
 
-  <!-- side bar with image and links -->
+    <!-- side bar with image and links -->
+
   <div classisoline114"column-7">
-    <img srcisoline114"./images/TransitSolution.png" altisoline114"ArcGIS Transit Solution screenshot">
+
+    <img srcisoline114"./images/TransitSolution.png" altisoline114"Engage with riders and monitor safety screenshot">
+
     <aside classisoline114"side-nav" idisoline114"sidenav">
+
       <nav aria-labelledbyisoline114"sidenav">
-        <a hrefisoline114"https://solutions.arcgis.com/local-government/transit/" relisoline114"noopener" targetisoline114"_blank" classisoline114"side-nav-link">Download</a>
-        <a hrefisoline114"https://storymaps.arcgis.com/stories/3e62d2d425fc472db12404dfa116c18b" relisoline114"noopener" targetisoline114"_blank" classisoline114"side-nav-link">Learn more</a>
+
+        <a hrefisoline114"https://doc.arcgis.com/en/arcgis-solutions/latest/reference/introduction-to-transit-outreach.htm" relisoline114"noopener" targetisoline114"_blank" classisoline114"side-nav-link">Rider outreach</a>
+<a hrefisoline114"https://doc.arcgis.com/en/arcgis-solutions/latest/reference/introduction-to-adopt-a-stop.htm" relisoline114"noopener" targetisoline114"_blank" classisoline114"side-nav-link">Adopt-A-Stop</a>
+<a hrefisoline114"https://doc.arcgis.com/en/arcgis-solutions/latest/reference/introduction-to-transit-safety.htm" relisoline114"noopener" targetisoline114"_blank" classisoline114"side-nav-link">Safety management</a>
+
       </nav>
+
     </aside>
+
   </div>
 
   <!-- main content -->
   <div classisoline114"column-16 pre-1">
 
-    <h2 classisoline114"leader-1">ArcGIS Transit Solution</h2>
+    <h2 classisoline114"leader-1">Engage with riders and monitor safety</h2>
 
     <p><strong>Configurable tools to inform the public of service changes, manage transit safety reports and mitigation plans, monitor the performance of transit agencies, and partner with volunteers to keep transit stops safe and clean.</strong></p>
 
     <p>The ArcGIS Solutions for Local Government's Transit Solution includes a series of focused maps and applications designed to help transit agencies leverage
       their geographic information and the ArcGIS Platform to improve workflows and enhance services delivered to riders. Configurable apps and templates are available
-      for rider outreach, adopt-a-stop program management, and transit safety management</p>
+      for <a hrefisoline114"https://doc.arcgis.com/en/arcgis-solutions/latest/reference/introduction-to-transit-outreach.htm" relisoline114"noopener" targetisoline114"_blank">rider outreach</a>,
+      <a hrefisoline114"https://doc.arcgis.com/en/arcgis-solutions/latest/reference/introduction-to-adopt-a-stop.htm" relisoline114"noopener" targetisoline114"_blank">adopt-a-stop program management</a>,
+      and <a hrefisoline114"https://doc.arcgis.com/en/arcgis-solutions/latest/reference/introduction-to-transit-safety.htm" relisoline114"noopener" targetisoline114"_blank">transit safety management</a>
+    </p>
 
   </div>
 

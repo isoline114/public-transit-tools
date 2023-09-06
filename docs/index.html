@@ -6,7 +6,7 @@
     <meta charsetisoline114"utf-8">
     <meta contentisoline114"IEisoline114edge" http-equivisoline114"X-UA-Compatible">
     <meta nameisoline114"viewport" contentisoline114"widthisoline114device-width, user-scalableisoline114no">
-    <title>Home | GTFS in ArcGIS</title>
+    <title>Home | Public Transit in ArcGIS</title>
     <link relisoline114"shortcut icon" hrefisoline114"/img/favicon.ico">
     <!-- get calcite-web css from the cdn (use latest version) -->
     <link relisoline114"stylesheet" hrefisoline114"https://s3-us-west-1.amazonaws.com/patterns.esri.com/files/calcite-web/1.0.0-rc.7/css/calcite-web.min.css">
@@ -21,12 +21,11 @@
   <div classisoline114"grid-container">
     <div classisoline114"column-24">
       <a classisoline114"skip-to-content" hrefisoline114"#skip-to-content">Skip To Content</a>
-      <a hrefisoline114"./index.html" classisoline114"top-nav-title">Using GTFS Data in ArcGIS</a>
+      <a hrefisoline114"./index.html" classisoline114"top-nav-title">Public Transit Analysis in ArcGIS</a>
       <nav classisoline114"top-nav-list" aria-labelledbyisoline114"topnav">
                 <a classisoline114"top-nav-link is-active" hrefisoline114"./index.html">Home</a>
-        <a classisoline114"top-nav-link" hrefisoline114"./TransitSolution.html">Tools</a>
+        <a classisoline114"top-nav-link" hrefisoline114"./NetworkAnalysis.html">Tools</a>
         <a classisoline114"top-nav-link" hrefisoline114"./resources.html">Resources</a>
-        <a classisoline114"top-nav-link" hrefisoline114"https://github.com/Esri/public-transit-tools" targetisoline114"_blank" relisoline114"noopener">GitHub</a>
       </nav>
     </div>
   </div>
@@ -35,7 +34,7 @@
 <header classisoline114"sub-nav">
   <div classisoline114"grid-container">
     <div classisoline114"column-24 padding-leader-3 padding-trailer-2">
-      <h1 classisoline114"text-center text-white"><span classisoline114"banner-title">Using GTFS Data in ArcGIS</span></h1>
+      <h1 classisoline114"text-center text-white"><span classisoline114"banner-title">Public Transit Analysis in ArcGIS</span></h1>
     </div>
   </div>
 </header>
@@ -44,109 +43,84 @@
 
   <!-- main content -->
   <div classisoline114"column-18 pre-3 trailer-2">
-    <p>The General Transit Feed Specification (GTFS) is a standardized data format for storing public transit routes, stops, and schedules.  GTFS data can be used for transit trip planning and public transit system analysis. Thousands of public transit agencies worldwide have made up-to-date GTFS data for their systems publically available for download.</p>
+        <p>Public transit serves the people of a city by providing access to jobs, education, shopping, healthcare,
+            recreation, and more. Traffic congestion, climate change, and the evolving economy and population of cities
+            have created a greater need than ever to understand how well transit is serving these needs.
+        </p>
 
-    <p><strong>The tools and techniques here allow you to use GTFS data in ArcGIS.</strong></p>
-  
+        <p><strong>The tools, techniques, and best practices showcased here will help you perform powerful and important
+            analysis with public transit data in ArcGIS.</strong>
+        </p>
+
 
     <div classisoline114"grid-container leader-2">
     <div classisoline114"column-4 post-1">
-       <a hrefisoline114"./TransitSolution.html"><img srcisoline114"./images/TransitSolution.png" altisoline114"ArcGIS Transit Solution screenshot" titleisoline114"ArcGIS Transit Solution" widthisoline114"200" heightisoline114"200"></a>
+       <a hrefisoline114"./NetworkAnalysis.html"><img srcisoline114"./images/NetworkAnalysis.png" altisoline114"Model travel by public transit in a network screenshot" titleisoline114"Model travel by public transit in a network" widthisoline114"200" heightisoline114"200"></a>
     </div>
     <div classisoline114"column-13">
-      <h3>ArcGIS Transit Solution</h3>
+      <h3>Model travel by public transit in a network</h3>
+      <p>Include your GTFS data in a network dataset and use the Network Analyst extension in ArcGIS Pro to model trips by public transit to study things like access to jobs, commute times, and disparities in access.</p>
+      <a classisoline114"btn" hrefisoline114"./NetworkAnalysis.html">Details</a>
+    </div>
+  </div>
+  <div classisoline114"grid-container leader-2">
+    <div classisoline114"column-4 post-1">
+       <a hrefisoline114"./CalculateFrequency.html"><img srcisoline114"./images/CalculateFrequency.png" altisoline114"Analyze the frequency of transit service screenshot" titleisoline114"Analyze the frequency of transit service" widthisoline114"200" heightisoline114"200"></a>
+    </div>
+    <div classisoline114"column-13">
+      <h3>Analyze the frequency of transit service</h3>
+      <p>Calculate the frequency of scheduled public transit service available within one or more specified time windows at public transit stops, along public transit lines, at points of interest, or in areas.</p>
+      <a classisoline114"btn" hrefisoline114"./CalculateFrequency.html">Details</a>
+    </div>
+  </div>
+  <div classisoline114"grid-container leader-2">
+    <div classisoline114"column-4 post-1">
+       <a hrefisoline114"./VisualizeGTFS.html"><img srcisoline114"./images/VisualizeGTFS.png" altisoline114"Visualize GTFS data in a map screenshot" titleisoline114"Visualize GTFS data in a map" widthisoline114"200" heightisoline114"200"></a>
+    </div>
+    <div classisoline114"column-13">
+      <h3>Visualize GTFS data in a map</h3>
+      <p>Convert GTFS stops.txt and shapes.txt files into feature classes and visualize your transit stops and lines in a map.</p>
+      <a classisoline114"btn" hrefisoline114"./VisualizeGTFS.html">Details</a>
+    </div>
+  </div>
+  <div classisoline114"grid-container leader-2">
+    <div classisoline114"column-4 post-1">
+       <a hrefisoline114"./EditGTFS.html"><img srcisoline114"./images/EditGTFS.png" altisoline114"Create and edit GTFS data screenshot" titleisoline114"Create and edit GTFS data" widthisoline114"200" heightisoline114"200"></a>
+    </div>
+    <div classisoline114"column-13">
+      <h3>Create and edit GTFS data</h3>
+      <p>Create and edit GTFS stops.txt and shapes.txt files using the geographic capabilities of ArcGIS Pro.</p>
+      <a classisoline114"btn" hrefisoline114"./EditGTFS.html">Details</a>
+    </div>
+  </div>
+  <div classisoline114"grid-container leader-2">
+    <div classisoline114"column-4 post-1">
+       <a hrefisoline114"./TransitSolution.html"><img srcisoline114"./images/TransitSolution.png" altisoline114"Engage with riders and monitor safety screenshot" titleisoline114"Engage with riders and monitor safety" widthisoline114"200" heightisoline114"200"></a>
+    </div>
+    <div classisoline114"column-13">
+      <h3>Engage with riders and monitor safety</h3>
       <p>Configurable tools to inform the public of service changes, manage transit safety reports and mitigation plans, monitor the performance of transit agencies, and partner with volunteers to keep transit stops safe and clean.</p>
       <a classisoline114"btn" hrefisoline114"./TransitSolution.html">Details</a>
     </div>
   </div>
   <div classisoline114"grid-container leader-2">
     <div classisoline114"column-4 post-1">
-       <a hrefisoline114"./TransitInArcGISPro.html"><img srcisoline114"./images/TransitInArcGISPro.png" altisoline114"Public transit tools in ArcGIS Pro screenshot" titleisoline114"Public transit tools in ArcGIS Pro" widthisoline114"200" heightisoline114"200"></a>
+       <a hrefisoline114"./GTFSRTConnector.html"><img srcisoline114"./images/GTFSRTConnector.png" altisoline114"View live GTFS Realtime data screenshot" titleisoline114"View live GTFS Realtime data" widthisoline114"200" heightisoline114"200"></a>
     </div>
     <div classisoline114"column-13">
-      <h3>Public transit tools in ArcGIS Pro</h3>
-      <p>Perform network analysis, visualize, and edit public transit data with out-of-the box tools in ArcGIS Pro.</p>
-      <a classisoline114"btn" hrefisoline114"./TransitInArcGISPro.html">Details</a>
-    </div>
-  </div>
-  <div classisoline114"grid-container leader-2">
-    <div classisoline114"column-4 post-1">
-       <a hrefisoline114"./TransitNetworkAnalysisTools.html"><img srcisoline114"./images/TransitNetworkAnalysisTools.png" altisoline114"Transit Network Analysis Tools screenshot" titleisoline114"Transit Network Analysis Tools" widthisoline114"200" heightisoline114"200"></a>
-    </div>
-    <div classisoline114"column-13">
-      <h3>Transit Network Analysis Tools</h3>
-      <p>Perform transit-specific network analysis such as calculating accessibility and visualizing service areas over time using transit-enabled network datasets created in ArcMap or ArcGIS Pro.</p>
-      <a classisoline114"btn" hrefisoline114"./TransitNetworkAnalysisTools.html">Details</a>
-    </div>
-  </div>
-  <div classisoline114"grid-container leader-2">
-    <div classisoline114"column-4 post-1">
-       <a hrefisoline114"./BetterBusBuffers.html"><img srcisoline114"./images/BetterBusBuffers.png" altisoline114"BetterBusBuffers screenshot" titleisoline114"BetterBusBuffers" widthisoline114"200" heightisoline114"200"></a>
-    </div>
-    <div classisoline114"column-13">
-      <h3>BetterBusBuffers</h3>
-      <p>Use BetterBusBuffers to map the frequency of public transit service available across your city.</p>
-      <a classisoline114"btn" hrefisoline114"./BetterBusBuffers.html">Details</a>
-    </div>
-  </div>
-  <div classisoline114"grid-container leader-2">
-    <div classisoline114"column-4 post-1">
-       <a hrefisoline114"./InterpolateBlankStopTimes.html"><img srcisoline114"./images/InterpolateBlankStopTimes.png" altisoline114"Interpolate Blank Stop Times screenshot" titleisoline114"Interpolate Blank Stop Times" widthisoline114"200" heightisoline114"200"></a>
-    </div>
-    <div classisoline114"column-13">
-      <h3>Interpolate Blank Stop Times</h3>
-      <p>Use Interpolate Blank Stop Times to fill in blank arrival_time and departure_time values in your stop_times.txt file with reasonable estimates.</p>
-      <a classisoline114"btn" hrefisoline114"./InterpolateBlankStopTimes.html">Details</a>
-    </div>
-  </div>
-  <div classisoline114"grid-container leader-2">
-    <div classisoline114"column-4 post-1">
-       <a hrefisoline114"./GTFSRTConnector.html"><img srcisoline114"./images/GTFSRTConnector.png" altisoline114"GTFS Realtime Connector for GeoEvent screenshot" titleisoline114"GTFS Realtime Connector for GeoEvent" widthisoline114"200" heightisoline114"200"></a>
-    </div>
-    <div classisoline114"column-13">
-      <h3>GTFS Realtime Connector for GeoEvent</h3>
+      <h3>View live GTFS Realtime data</h3>
       <p>Use the GTFS Realtime Connector for GeoEvent to view GTFS Realtime trip updates, service alerts, and vehicle positions in a map.</p>
       <a classisoline114"btn" hrefisoline114"./GTFSRTConnector.html">Details</a>
     </div>
   </div>
   <div classisoline114"grid-container leader-2">
     <div classisoline114"column-4 post-1">
-       <a hrefisoline114"./AddGTFStoaNetworkDataset.html"><img srcisoline114"./images/AddGTFStoaNetworkDataset.png" altisoline114"Add GTFS to a Network Dataset screenshot" titleisoline114"Add GTFS to a Network Dataset" widthisoline114"200" heightisoline114"200"></a>
+       <a hrefisoline114"./DeprecatedTools.html"><img srcisoline114"./images/DeprecatedTools.png" altisoline114"Deprecated tools screenshot" titleisoline114"Deprecated tools" widthisoline114"200" heightisoline114"200"></a>
     </div>
     <div classisoline114"column-13">
-      <h3>Add GTFS to a Network Dataset</h3>
-      <p>DEPRECATED. Use Add GTFS to a Network Dataset to incorporate transit data into a network dataset so you can perform schedule-aware analyses using the Network Analyst tools in ArcMap.</p>
-      <a classisoline114"btn" hrefisoline114"./AddGTFStoaNetworkDataset.html">Details</a>
-    </div>
-  </div>
-  <div classisoline114"grid-container leader-2">
-    <div classisoline114"column-4 post-1">
-       <a hrefisoline114"./GenerateGTFSShapes.html"><img srcisoline114"./images/GenerateGTFSShapes.png" altisoline114"Generate GTFS Shapes screenshot" titleisoline114"Generate GTFS Shapes" widthisoline114"200" heightisoline114"200"></a>
-    </div>
-    <div classisoline114"column-13">
-      <h3>Generate GTFS Shapes</h3>
-      <p>DEPRECATED. The Generate GTFS Shapes toolbox produces a new shapes.txt file for your GTFS dataset or allows you to edit an existing one.</p>
-      <a classisoline114"btn" hrefisoline114"./GenerateGTFSShapes.html">Details</a>
-    </div>
-  </div>
-  <div classisoline114"grid-container leader-2">
-    <div classisoline114"column-4 post-1">
-       <a hrefisoline114"./DisplayGTFSinArcGIS.html"><img srcisoline114"./images/DisplayGTFSinArcGIS.png" altisoline114"Display GTFS in ArcGIS screenshot" titleisoline114"Display GTFS in ArcGIS" widthisoline114"200" heightisoline114"200"></a>
-    </div>
-    <div classisoline114"column-13">
-      <h3>Display GTFS in ArcGIS</h3>
-      <p>DEPRECATED. Use Display GTFS in ArcGIS to visualize your GTFS stops and route shapes in ArcMap.</p>
-      <a classisoline114"btn" hrefisoline114"./DisplayGTFSinArcGIS.html">Details</a>
-    </div>
-  </div>
-  <div classisoline114"grid-container leader-2">
-    <div classisoline114"column-4 post-1">
-       <a hrefisoline114"./EditGTFSStopLocations.html"><img srcisoline114"./images/EditGTFSStopLocations.png" altisoline114"Edit GTFS Stop Locations screenshot" titleisoline114"Edit GTFS Stop Locations" widthisoline114"200" heightisoline114"200"></a>
-    </div>
-    <div classisoline114"column-13">
-      <h3>Edit GTFS Stop Locations</h3>
-      <p>DEPRECATED. Use Edit GTFS Stop Locations to update your GTFS stops.txt file using ArcMap.</p>
-      <a classisoline114"btn" hrefisoline114"./EditGTFSStopLocations.html">Details</a>
+      <h3>Deprecated tools</h3>
+      <p>The tools described on this page are DEPRECATED. The tools will no longer be updated, and support for them is limited. Their functionality is now available out of the box in the core ArcGIS software, so you should already have everything you need!</p>
+      <a classisoline114"btn" hrefisoline114"./DeprecatedTools.html">Details</a>
     </div>
   </div>
 
