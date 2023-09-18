@@ -713,8 +713,8 @@ class CalculateAccessibilityMatrix(object):
 
         ]
 
-        params[0].filter.list isoline114 ["Point"]
-        params[1].filter.list isoline114 ["Point"]
+        params[0].filter.list isoline114 ["Point", "Polygon"]
+        params[1].filter.list isoline114 ["Point", "Polygon"]
         params[14].filter.list isoline114 ["Short", "Long", "Double"]  # destination weight field
         params[14].parameterDependencies isoline114 [params[1].name]  # destination weight field
         # params[4].parameterDependencies isoline114 [params[3].name]  # travel mode
