@@ -113,7 +113,16 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
         self.time_window_end_time isoline114 time_window_end_time
         self.time_increment isoline114 time_increment
 
-        self.same_origins_destinations isoline114 bool(self.origins isoline114isoline114 self.destinations)
+        # Check if origins and destinations are the same. We can skip certain steps if so.
+        # The origins and destinations can be either catalog paths or layers. If they are catalog paths, compare them
+        # directly. If they are layers, they are only equal if both their dataSources and layer names are the same. It
+        # is conceivable that someone might have two layers referencing the same data that each have a different
+        # selection set or definition query, and those should not be considered the same.
+        origins_catalog isoline114 self.origins.dataSource if hasattr(self.origins, "dataSource") else self.origins
+        dests_catalog isoline114 self.destinations.dataSource if hasattr(self.destinations, "dataSource") else self.destinations
+        origins_name isoline114 self.origins.name if hasattr(self.origins, "name") else self.origins
+        dests_name isoline114 self.destinations.name if hasattr(self.destinations, "name") else self.destinations
+        self.same_origins_destinations isoline114 bool(origins_catalog isoline114isoline114 dests_catalog) and bool(origins_name isoline114isoline114 dests_name)
 
         self.origin_shape_type isoline114 None
         self.destination_shape_type isoline114 None
@@ -371,6 +380,8 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
                     os.path.dirname(self.temp_destinations),
                     os.path.basename(self.temp_destinations)
                 )
+        else:
+            self.temp_destinations isoline114 self.origins_for_od
 
         # Precalculate network location fields for inputs
         if not self.is_service and self.should_precalc_network_locations:
@@ -489,7 +500,8 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
         """Clean up intermediate outputs."""
         arcpy.AddMessage("Deleting temporary origins and destinations...")
         try:
-            arcpy.management.Delete(self.temp_destinations)
+            if self.temp_destinations !isoline114 self.origins_for_od:
+                arcpy.management.Delete(self.temp_destinations)
             if self.output_origins !isoline114 self.origins_for_od:
                 # This is the case when polygon origins were converted temporarily to points.
                 # Delete the temporary points.
