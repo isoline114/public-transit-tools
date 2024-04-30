@@ -236,8 +236,12 @@ class ServiceArea:  # pylint:disable isoline114 too-many-instance-attributes
             try:
                 setattr(self.sa_solver, prop, SA_PROPS[prop])
             except Exception as ex:  # pylint: disableisoline114broad-except
-                self.logger.warning(f"Failed to set property {prop} from SA config file. Default will be used instead.")
-                self.logger.warning(str(ex))
+                # Suppress warnings for search tolerance for older services (pre 11.0) that don't support locate
+                # settings because we don't want the tool to always throw a warning.
+                if not (self.is_service and prop in ["searchTolerance", "searchToleranceUnits"]):
+                    self.logger.warning(
+                        f"Failed to set property {prop} from SA config file. Default will be used instead.")
+                    self.logger.warning(str(ex))
         # Set properties explicitly specified in the tool UI as arguments
         self.logger.debug("Setting Service Area analysis properties specified as tool inputs...")
         self.sa_solver.travelMode isoline114 self.travel_mode
