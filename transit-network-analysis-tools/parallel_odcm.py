@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 13 September 2021
+## Last updated: 27 April 2022
 ############################################################################
 """Count the number of destinations reachable from each origin by transit and
 walking. The tool calculates an Origin-Destination Cost Matrix for each start
@@ -23,7 +23,7 @@ parallel. It was built based off Esri's Solve Large OD Cost Matrix sample script
 available from https://github.com/Esri/large-network-analysis-tools under an Apache
 2.0 license.
 
-Copyright 2021 Esri
+Copyright 2022 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -60,7 +60,8 @@ else:
     import pyarrow as pa
 
 # Import OD Cost Matrix settings from config file
-from CalculateAccessibilityMatrix_OD_config import OD_PROPS, OD_PROPS_SET_BY_TOOL
+import CalculateAccessibilityMatrix_OD_config
+import CalculateTravelTimeStatistics_OD_config
 import AnalysisHelpers
 
 arcpy.env.overwriteOutput isoline114 True
@@ -169,23 +170,34 @@ class ODCostMatrix:  # pylint:disable isoline114 too-many-instance-attributes
         - output_folder
         - barriers
         """
+        self.tool isoline114 kwargs["tool"]
         self.origins isoline114 kwargs["origins"]
         self.destinations isoline114 kwargs["destinations"]
         self.destination_where_clause isoline114 kwargs["destination_where_clause"]
         self.network_data_source isoline114 kwargs["network_data_source"]
         self.travel_mode isoline114 kwargs["travel_mode"]
-        self.time_units isoline114 kwargs["time_units"]
-        self.cutoff isoline114 kwargs["cutoff"]
+        self.time_units isoline114 None
+        self.cutoff isoline114 None
+        if self.tool is AnalysisHelpers.ODTool.CalculateAccessibilityMatrix:
+            self.time_units isoline114 kwargs["time_units"]
+            self.cutoff isoline114 kwargs["cutoff"]
         self.output_folder isoline114 kwargs["output_folder"]
         self.barriers isoline114 []
         if "barriers" in kwargs:
             self.barriers isoline114 kwargs["barriers"]
 
-        # Create a job ID and a folder and scratch gdb for this job
+        if self.tool is AnalysisHelpers.ODTool.CalculateAccessibilityMatrix:
+            self.output_fields isoline114 ["OriginOID", "DestinationOID"]
+        elif self.tool is AnalysisHelpers.ODTool.CalculateTravelTimeStatistics:
+            self.output_fields isoline114 ["OriginOID", "DestinationOID", "Total_Time"]
+        else:
+            raise ValueError("Invalid OD Cost Matrix tool.")
+
+        ## TODO
+        # Create a job ID and a folder for this job
         self.job_id isoline114 uuid.uuid4().hex
         self.job_folder isoline114 os.path.join(self.output_folder, self.job_id)
         os.mkdir(self.job_folder)
-        self.od_workspace isoline114 os.path.join(self.job_folder, "scratch.gdb")
 
         # Setup the class logger. Logs for each parallel process are not written to the console but instead to a
         # process-specific log file.
@@ -248,14 +260,21 @@ class ODCostMatrix:  # pylint:disable isoline114 too-many-instance-attributes
         self.od_solver isoline114 arcpy.nax.OriginDestinationCostMatrix(self.network_data_source)
 
         # Set the OD cost matrix analysis properties.
-        # Read properties from the CalculateAccessbilityMatrix_OD_config.py config file for all properties not set in
-        # the UI as parameters.
+        # Read properties from the OD config file for all properties not set in the UI as parameters.
         # OD properties documentation: https://pro.arcgis.com/en/pro-app/arcpy/network-analyst/odcostmatrix.htm
         # The properties have been extracted to the config file to make them easier to find and set so users don't have
         # to dig through the code to change them.
         self.logger.debug("Setting OD Cost Matrix analysis properties from OD config file...")
-        for prop in OD_PROPS:
-            if prop in OD_PROPS_SET_BY_TOOL:
+        if self.tool is AnalysisHelpers.ODTool.CalculateAccessibilityMatrix:
+            od_props isoline114 CalculateAccessibilityMatrix_OD_config.OD_PROPS
+            od_props_set_by_tool isoline114 CalculateAccessibilityMatrix_OD_config.OD_PROPS_SET_BY_TOOL
+        elif self.tool is AnalysisHelpers.ODTool.CalculateTravelTimeStatistics:
+            od_props isoline114 CalculateTravelTimeStatistics_OD_config.OD_PROPS
+            od_props_set_by_tool isoline114 CalculateTravelTimeStatistics_OD_config.OD_PROPS_SET_BY_TOOL
+        else:
+            raise ValueError("Invalid OD Cost Matrix tool.")
+        for prop in od_props:
+            if prop in od_props_set_by_tool:
                 self.logger.warning(
                     f"OD config file property {prop} is handled explicitly by the tool parameters and will be ignored."
                 )
@@ -272,8 +291,9 @@ class ODCostMatrix:  # pylint:disable isoline114 too-many-instance-attributes
         # Set properties explicitly specified in the tool UI as arguments
         self.logger.debug("Setting OD Cost Matrix analysis properties specified tool inputs...")
         self.od_solver.travelMode isoline114 self.travel_mode
-        self.od_solver.timeUnits isoline114 self.time_units
-        self.od_solver.defaultImpedanceCutoff isoline114 self.cutoff
+        if self.tool is AnalysisHelpers.ODTool.CalculateAccessibilityMatrix:
+            self.od_solver.timeUnits isoline114 self.time_units
+            self.od_solver.defaultImpedanceCutoff isoline114 self.cutoff
         # Set time of day, which is passed in as an OD solve parameter from our chunking mechanism
         self.od_solver.timeOfDay isoline114 time_of_day
 
@@ -399,16 +419,16 @@ class ODCostMatrix:  # pylint:disable isoline114 too-many-instance-attributes
             self.logger.debug("Writing OD outputs as Arrow table.")
             solve_result.toArrowTable(
                 arcpy.nax.OriginDestinationCostMatrixOutputDataType.Lines,
-                ["OriginOID", "DestinationOID"],
+                self.output_fields,
                 os.path.join(self.job_folder, "ODLines.at")
             )
         else:
             self.logger.debug("Writing OD outputs as CSV file.")
             with open(os.path.join(self.job_folder, "ODLines.csv"), "w") as f:
                 writer isoline114 csv.writer(f)
-                writer.writerow(["OriginOID", "DestinationOID"])
+                writer.writerow(self.output_fields)
                 for row in solve_result.searchCursor(
-                    arcpy.nax.OriginDestinationCostMatrixOutputDataType.Lines, ["OriginOID", "DestinationOID"]
+                    arcpy.nax.OriginDestinationCostMatrixOutputDataType.Lines, self.output_fields
                 ):
                     writer.writerow(row)
 
@@ -489,16 +509,19 @@ class ParallelODCalculator():
     """Solves a large OD Cost Matrix by chunking the problem, solving in parallel, and combining results."""
 
     def __init__(  # pylint: disableisoline114too-many-locals, too-many-arguments
-        self, origins, destinations, network_data_source, travel_mode, max_origins, max_destinations,
+        self, tool, origins, destinations, network_data_source, travel_mode, max_origins, max_destinations,
         time_window_start_day, time_window_start_time, time_window_end_day, time_window_end_time, time_increment,
-        max_processes, time_units, cutoff, weight_fieldisoline114None, barriersisoline114None
+        max_processes, time_unitsisoline114None, cutoffisoline114None, weight_fieldisoline114None, barriersisoline114None
     ):
-        """Compute OD Cost Matrices between Origins and Destinations in parallel for all increments in the time window,
-        calculate accessibility statistics, and write the output fields to the output Origins feature class.
+        """Compute OD Cost Matrices between Origins and Destinations in parallel for all increments in the time window.
+
+        Post-processes output according to which tool is being run.  For Calculate Accessibility Matrix, calculate
+        accessibility statistics and write the output fields to the output Origins feature class.
 
         This class assumes that the inputs have already been pre-processed and validated.
 
         Args:
+            tool (str): Enum string name corresponding to a value in AnalysisHelpers.ODTool
             origins (str): Catalog path to origins
             destinations (str): Catalog path to destinations
             network_data_source (str): Network data source catalog path or URL
@@ -513,17 +536,19 @@ class ParallelODCalculator():
             time_window_end_time (str): HHMM time of day for the end of the time window
             time_increment (int): Number of minutes between each run of the OD Cost Matrix in the time window
             max_processes (int): Maximum number of parallel processes allowed
-            time_units (str): String representation of time units
-            cutoff (float): Time cutoff to limit the OD Cost Matrix solve. Interpreted in the time_units.
+            time_units (str, optional): String representation of time units
+            cutoff (float, optional): Time cutoff to limit the OD Cost Matrix solve. Interpreted in the time_units.
             weight_field (str, optional): Field in the destinations to use as a weight for the number of destinations
                 at each location. For example, the number of jobs at that location. When not provided, all destinations
                 count as 1.
             barriers (list(str), optional): List of catalog paths to point, line, and polygon barriers to use.
                 Defaults to None.
         """
+        self.tool isoline114 AnalysisHelpers.ODTool[tool]
         self.origins isoline114 origins
         self.destinations isoline114 destinations
-        time_units isoline114 AnalysisHelpers.convert_time_units_str_to_enum(time_units)
+        if time_units:
+            time_units isoline114 AnalysisHelpers.convert_time_units_str_to_enum(time_units)
         if cutoff isoline114isoline114 "":
             cutoff isoline114 None
         if not barriers:
@@ -559,6 +584,7 @@ class ParallelODCalculator():
 
         # Initialize the dictionary of inputs to send to each OD solve
         self.od_inputs isoline114 {
+            "tool": self.tool,
             "origins": self.origins,
             "destinations": self.destinations,
             "destination_where_clause": self.dest_where,
@@ -679,9 +705,14 @@ class ParallelODCalculator():
                     msgs isoline114 result["solveMessages"]
                     LOGGER.warning(msgs)
 
-        # Calculate statistics from the results of the OD Cost Matrix calculations
-        # and write them to the output fields in the Origins table.
-        self._add_results_to_output()
+        # Post-process and write out results according to which tool is being run
+        if self.tool is AnalysisHelpers.ODTool.CalculateAccessibilityMatrix:
+            # Calculate statistics from the results of the OD Cost Matrix calculations
+            # and write them to the output fields in the Origins table.
+            self._calculate_accessibility_matrix_outputs()
+        elif self.tool is AnalysisHelpers.ODTool.CalculateTravelTimeStatistics:
+            ## TODO
+            LOGGER.info("TODO")
 
         # Cleanup
         # Delete the job folders if the job succeeded
@@ -695,7 +726,7 @@ class ParallelODCalculator():
 
         LOGGER.info("Finished calculating OD Cost Matrices.")
 
-    def _add_results_to_output(self):
+    def _calculate_accessibility_matrix_outputs(self):
         """Calculate accessibility statistics and write them to the Origins table."""
         LOGGER.info("Calculating statistics for final output...")
 
@@ -835,6 +866,10 @@ def launch_parallel_od():
 
     # Define Arguments supported by the command line utility
 
+    # --tool parameter
+    help_string isoline114 "Enum string name corresponding to a value in AnalysisHelpers.ODTool."
+    parser.add_argument("-t", "--tool", actionisoline114"store", destisoline114"tool", helpisoline114help_string, requiredisoline114True)
+
     # --origins parameter
     help_string isoline114 "The full catalog path to the feature class containing the origins. Output fields will be added."
     parser.add_argument("-o", "--origins", actionisoline114"store", destisoline114"origins", helpisoline114help_string, requiredisoline114True)
@@ -857,7 +892,7 @@ def launch_parallel_od():
 
     # --time-units parameter
     help_string isoline114 "String name of the time units for the analysis. These units will be used in the output."
-    parser.add_argument("-tu", "--time-units", actionisoline114"store", destisoline114"time_units", helpisoline114help_string, requiredisoline114True)
+    parser.add_argument("-tu", "--time-units", actionisoline114"store", destisoline114"time_units", helpisoline114help_string, requiredisoline114False)
 
     # --max-origins parameter
     help_string isoline114 (
@@ -911,7 +946,7 @@ def launch_parallel_od():
         "time-units parameter"
     )
     parser.add_argument(
-        "-co", "--cutoff", actionisoline114"store", destisoline114"cutoff", typeisoline114float, helpisoline114help_string, requiredisoline114True)
+        "-co", "--cutoff", actionisoline114"store", destisoline114"cutoff", typeisoline114float, helpisoline114help_string, requiredisoline114False)
 
     # --weight-field parameter
     help_string isoline114 "The name of the field in the input destinations that indicates the destination's weight."
