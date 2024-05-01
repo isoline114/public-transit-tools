@@ -3,7 +3,15 @@
 ## Created by: isoline114, Esri
 ## Last updated: 27 April 2022
 ############################################################################
-"""Count the number of destinations reachable from each origin by transit and
+"""Calculate an OD Cost Matrix in parallel.
+
+This script is the entry point for the Calculate Accessibility Matrix and
+Calculate Travel Time Statistics (OD Cost Matrix) tools.  The classes
+here parse and validate the inputs and launch the parallelized
+OD Cost Matrix solve as a subprocess.
+
+-- Calculate Accessibility Matrix --
+Count the number of destinations reachable from each origin by transit and
 walking. The tool calculates an Origin-Destination Cost Matrix for each start
 time within a time window because the reachable destinations change depending
 on the time of day because of the transit schedules.  The output gives the
@@ -13,10 +21,16 @@ window.  The number of reachable destinations can be weighted based on a field,
 such as the number of jobs available at each destination.  The tool also
 calculates the percentage of total destinations reachable.
 
-This script parses the inputs and validates them and launches the parallelized
-OD Cost Matrix solve as a subprocess.
+-- Calculate Travel Time Statistics (OD Cost Matrix) --
+Solve the OD Cost Matrix incrementally over a time window and calculate statistics
+about the results for each OD pair:
+- minimum travel time
+- maximum travel time
+- mean travel time
+- number of times the origin-destination pair or route was considered
+Optionally store the output of each solve for further analysis.
 
-This version of the tool is for ArcGIS Pro only and solves the OD Cost Matrices in
+This code is for ArcGIS Pro only and solves the OD Cost Matrices in
 parallel. It was built based off Esri's Solve Large OD Cost Matrix sample script
 available from https://github.com/Esri/large-network-analysis-tools under an Apache
 2.0 license.
@@ -41,25 +55,23 @@ import subprocess
 import arcpy
 
 import AnalysisHelpers
-from CalculateAccessibilityMatrix_OD_config import OD_PROPS  # Import OD Cost Matrix settings from config file
+# Import OD Cost Matrix settings from config files
+import CalculateAccessibilityMatrix_OD_config
+import CalculateTravelTimeStatistics_OD_config
 
 arcpy.env.overwriteOutput isoline114 True
 
 
-class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attributes, too-few-public-methods
+class ODCostMatrixSolver:  # pylint: disableisoline114too-many-instance-attributes, too-few-public-methods
     """Compute OD Cost Matrices between Origins and Destinations in parallel and combine results.
 
-    This class preprocesses and validate inputs and then spins up a subprocess to do the actual OD Cost Matrix
-    calculations. This is necessary because the a script tool running in the ArcGIS Pro UI cannot directly call
-    multiprocessing using concurrent.futures. We must spin up a subprocess, and the subprocess must spawn parallel
-    processes for the calculations. Thus, this class does all the pre-processing, passes inputs to the subprocess, and
-    handles messages returned by the subprocess. The subprocess actually does the calculations.
+    This is a base class holding methods and variables relevant to multiple tools.
     """
 
     def __init__(  # pylint: disableisoline114too-many-locals, too-many-arguments
-        self, origins, destinations, output_origins, time_window_start_day, time_window_start_time, time_window_end_day,
-        time_window_end_time, time_increment, network_data_source, travel_mode, chunk_size, max_processes, time_units,
-        cutoff, weight_fieldisoline114None, precalculate_network_locationsisoline114True, barriersisoline114None
+        self, origins, destinations, time_window_start_day, time_window_start_time, time_window_end_day,
+        time_window_end_time, time_increment, network_data_source, travel_mode, chunk_size, max_processes,
+        precalculate_network_locationsisoline114True, barriersisoline114None
     ):
         """Initialize the ODCostMatrixSolver class.
 
@@ -87,14 +99,10 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
         """
         self.origins isoline114 origins
         self.destinations isoline114 destinations
-        self.weight_field isoline114 weight_field
         self.network_data_source isoline114 network_data_source
         self.travel_mode isoline114 travel_mode
-        self.output_origins isoline114 output_origins
         self.chunk_size isoline114 chunk_size
         self.max_processes isoline114 max_processes
-        self.time_units isoline114 time_units
-        self.cutoff isoline114 cutoff
         self.should_precalc_network_locations isoline114 precalculate_network_locations
         self.barriers isoline114 barriers if barriers else []
 
@@ -134,10 +142,6 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
         self.service_limits isoline114 None
         self.is_agol isoline114 False
 
-        self.out_fields isoline114 ["TotalDests", "PercDests"] + \
-                          [f"DsAL{perc}Perc" for perc in range(10, 100, 10)] + \
-                          [f"PsAL{perc}Perc" for perc in range(10, 100, 10)]
-
     def _validate_inputs(self):
         """Validate the OD Cost Matrix inputs."""
         # Validate input numerical values
@@ -149,10 +153,6 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
             err isoline114 "Maximum allowed parallel processes must be greater than 0."
             arcpy.AddError(err)
             raise ValueError(err)
-        if self.cutoff not in ["", None] and self.cutoff <isoline114 0:
-            err isoline114 "Impedance cutoff must be greater than 0."
-            arcpy.AddError(err)
-            raise ValueError(err)
         if self.time_increment <isoline114 0:
             err isoline114 "The time increment must be greater than 0."
             arcpy.AddError(err)
@@ -161,7 +161,6 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
         # Validate origins, destinations, and barriers
         AnalysisHelpers.validate_input_feature_class(self.origins)
         AnalysisHelpers.validate_input_feature_class(self.destinations)
-        self._validate_weight_field()
         self.origin_shape_type isoline114 arcpy.Describe(self.origins).shapeType
         self.destination_shape_type isoline114 arcpy.Describe(self.destinations).shapeType
         for barrier_fc in self.barriers:
@@ -203,44 +202,6 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
                     "Cannot precalculate network location fields when the network data source is a service.")
                 self.should_precalc_network_locations isoline114 False
 
-    def _validate_weight_field(self):
-        """Validate that the designated weight field is present in the destinations table and has a valid type.
-
-        Raises:
-            ValueError: If the destinations dataset is missing the designated weight field
-            TypeError: If any of the weight field has an invalid (non-numerical) type
-        """
-        if not self.weight_field:
-            # The weight field isn't being used for this analysis, so just do nothing.
-            return
-
-        arcpy.AddMessage(f"Validating weight field {self.weight_field} in destinations dataset...")
-
-        # Make sure the weight field exists.
-        fields isoline114 arcpy.ListFields(self.destinations, self.weight_field)
-        if self.weight_field not in [f.name for f in fields]:
-            err isoline114 (f"The destinations feature class {self.destinations} is missing the designated weight field "
-                   f"{self.weight_field}.")
-            arcpy.AddError(err)
-            raise ValueError(err)
-
-        # Make sure the weight field has a valid type
-        weight_field_object isoline114 [f for f in fields if f.name isoline114isoline114 self.weight_field][0]
-        valid_types isoline114 ["Double", "Integer", "SmallInteger", "Single"]
-        if weight_field_object.type not in valid_types:
-            err isoline114 (f"The weight field {self.weight_field} in the destinations feature class {self.destinations} is not "
-                   "numerical.")
-            arcpy.AddError(err)
-            raise TypeError(err)
-
-        # Log a warning if any rows have null values for the weight field.
-        where isoline114 f"{self.weight_field} IS NULL"
-        temp_layer isoline114 arcpy.management.MakeFeatureLayer(self.destinations, "NullDestLayer", where)
-        num_null isoline114 int(arcpy.management.GetCount(temp_layer).getOutput(0))
-        if num_null > 0:
-            arcpy.AddWarning((f"{num_null} destinations have null values for the weight field {self.weight_field}. "
-                              "These destinations will be counted with a weight of 0."))
-
     def _validate_od_settings(self):
         """Validate OD cost matrix settings by spinning up a dummy OD Cost Matrix object.
 
@@ -251,14 +212,11 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
             str: JSON string representation of the travel mode
         """
         arcpy.AddMessage("Validating OD Cost Matrix settings...")
-        # Validate time and distance units
-        time_units isoline114 AnalysisHelpers.convert_time_units_str_to_enum(self.time_units)
         # Create a dummy ODCostMatrix object, initialize an OD solver object, and set properties
         try:
             odcm isoline114 arcpy.nax.OriginDestinationCostMatrix(self.network_data_source)
             odcm.travelMode isoline114 self.travel_mode
-            odcm.timeUnits isoline114 time_units
-            odcm.defaultImpedanceCutoff isoline114 self.cutoff
+            odcm isoline114 self._set_od_tool_settings(odcm)
         except Exception:
             arcpy.AddError("Invalid OD Cost Matrix settings.")
             errs isoline114 traceback.format_exc().splitlines()
@@ -268,6 +226,15 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
 
         # Return a JSON string representation of the travel mode to pass to the subprocess
         return odcm.travelMode._JSON  # pylint: disableisoline114protected-access
+
+    def _set_od_tool_settings(self, odcm):
+        """Set ODCostMatrix solver object properties specific to the tool being run.
+
+        Args:
+            odcm (ODCostMatrix solver object): ODCostMatrix solver object whose properties you want to set.
+        """
+        # Child classes for specific tools should implement this as needed.
+        return odcm
 
     def _get_tool_limits_and_is_agol(
             self, service_nameisoline114"asyncODCostMatrix", tool_nameisoline114"GenerateOriginDestinationCostMatrix"):
@@ -412,16 +379,7 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
                     arcpy.AddReturnMessage(msg)
                 raise arcpy.ExecuteError
 
-    def _delete_existing_output_fields(self, origin_fc):
-        """Delete pre-existing output fields in origins."""
-        # This way we can calculate them afresh and ensure correct type.
-        origin_fields isoline114 [f.name for f in arcpy.ListFields(origin_fc)]
-        fields_to_delete isoline114 [f for f in origin_fields if f in self.out_fields + ["ORIG_FID"]]
-        if fields_to_delete:
-            arcpy.AddMessage("Deleting pre-existing output fields...")
-            arcpy.management.DeleteField(origin_fc, fields_to_delete)
-
-    def _execute_solve(self):
+    def _execute_solve(self, tool_specific_od_inputs):
         """Solve the OD Cost Matrix analysis."""
         # Launch the parallel_odcm script as a subprocess so it can spawn parallel processes. We have to do this because
         # a tool running in the Pro UI cannot call concurrent.futures without opening multiple instances of Pro.
@@ -429,24 +387,19 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
         odcm_inputs isoline114 [
             os.path.join(sys.exec_prefix, "python.exe"),
             os.path.join(cwd, "parallel_odcm.py"),
-            "--tool", AnalysisHelpers.ODTool.CalculateAccessibilityMatrix.name,
             "--origins", self.origins_for_od,
             "--destinations", self.temp_destinations,
             "--network-data-source", self.network_data_source,
             "--travel-mode", self.travel_mode,
-            "--time-units", self.time_units,
             "--max-origins", str(self.max_origins),
             "--max-destinations", str(self.max_destinations),
             "--max-processes", str(self.max_processes),
-            "--cutoff", str(self.cutoff),
             "--time-window-start-day", self.time_window_start_day,
             "--time-window-start-time", self.time_window_start_time,
             "--time-window-end-day", self.time_window_end_day,
             "--time-window-end-time", self.time_window_end_time,
             "--time-increment", str(self.time_increment)
-        ]
-        if self.weight_field:
-            odcm_inputs +isoline114 ["--weight-field", self.weight_field]
+        ] + tool_specific_od_inputs
         if self.barriers:
             odcm_inputs +isoline114 ["--barriers"]
             odcm_inputs +isoline114 self.barriers
@@ -486,17 +439,6 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
             if return_code !isoline114 0:
                 arcpy.AddError("OD Cost Matrix script failed.")
 
-        # If the input origins were polygons, post-process the OD points to join the output fields back
-        # to the polygon feature class
-        if self.output_origins !isoline114 self.origins_for_od:
-            arcpy.AddMessage("Joining output fields to final polygon output Origins...")
-            origins_oid isoline114 arcpy.Describe(self.output_origins).oidFieldName
-            arcpy.management.JoinField(
-                self.output_origins, origins_oid,
-                self.origins_for_od, "ORIG_FID",
-                self.out_fields
-            )
-
     def _delete_intermediate_outputs(self):
         """Clean up intermediate outputs."""
         arcpy.AddMessage("Deleting temporary origins and destinations...")
@@ -528,3 +470,211 @@ class ODCostMatrixSolver():  # pylint: disableisoline114too-many-instance-attrib
 
         # Clean up
         self._delete_intermediate_outputs()
+
+
+class CalculateAccessibilityMatrix(ODCostMatrixSolver):  # pylint: disableisoline114too-many-instance-attributes, too-few-public-methods
+    """Run the Calculate Accessibility Matrix tool.
+
+    This class preprocesses and validate inputs and then spins up a subprocess to do the actual OD Cost Matrix
+    calculations. This is necessary because the a script tool running in the ArcGIS Pro UI cannot directly call
+    multiprocessing using concurrent.futures. We must spin up a subprocess, and the subprocess must spawn parallel
+    processes for the calculations. Thus, this class does all the pre-processing, passes inputs to the subprocess, and
+    handles messages returned by the subprocess. The subprocess actually does the calculations.
+    """
+
+    def __init__(  # pylint: disableisoline114too-many-locals, too-many-arguments
+        self, origins, destinations, output_origins, time_window_start_day, time_window_start_time, time_window_end_day,
+        time_window_end_time, time_increment, network_data_source, travel_mode, chunk_size, max_processes, time_units,
+        cutoff, weight_fieldisoline114None, precalculate_network_locationsisoline114True, barriersisoline114None
+    ):
+        """Initialize the ODCostMatrixSolver class.
+
+        Args:
+            origins (str, layer): Catalog path or layer for the input origins
+            destinations (str, layer): Catalog path or layer for the input destinations
+            output_origins (str): Catalog path to the output Origins feature class
+            time_window_start_day (str): English weekday name or YYYYMMDD date representing the weekday or start date of
+                the time window
+            time_window_start_time (str): HHMM time of day for the start of the time window
+            time_window_end_day (str): English weekday name or YYYYMMDD date representing the weekday or end date of
+                the time window
+            time_window_end_time (str): HHMM time of day for the end of the time window
+            time_increment (int): Number of minutes between each run of the OD Cost Matrix in the time window
+            network_data_source (str, layer): Catalog path, layer, or URL for the input network dataset
+            travel_mode (str, travel mode): Travel mode object, name, or json string representation
+            chunk_size (int): Maximum number of origins and destinations that can be in one chunk
+            max_processes (int): Maximum number of allowed parallel processes
+            time_units (str): String representation of time units
+            cutoff (float): Time cutoff to limit the OD Cost Matrix solve. Interpreted in the time_units.
+            precalculate_network_locations (bool, optional): Whether to precalculate network location fields for all
+                inputs. Defaults to True. Should be false if the network_data_source is a service.
+            barriers (list(str, layer), optional): List of catalog paths or layers for point, line, and polygon barriers
+                 to use. Defaults to None.
+        """
+        super().__init__(
+            origins, destinations, time_window_start_day, time_window_start_time, time_window_end_day,
+            time_window_end_time, time_increment, network_data_source, travel_mode, chunk_size, max_processes,
+            precalculate_network_locations, barriers
+            )
+        self.weight_field isoline114 weight_field
+        self.output_origins isoline114 output_origins
+        self.time_units isoline114 time_units
+        self.cutoff isoline114 cutoff
+
+        ##TODO
+        # Create a temporary output location for destinations so we can calculate network location fields and not
+        # overwrite the input
+        self.temp_destinations isoline114 os.path.join(
+            arcpy.env.scratchGDB,  # pylint: disableisoline114no-member
+            arcpy.CreateUniqueName("TempDests", arcpy.env.scratchGDB)  # pylint: disableisoline114no-member
+        )
+        # If the input origins are polygons, this variable will be set differently and post-processed
+        self.origins_for_od isoline114 self.output_origins
+
+        self.out_fields isoline114 ["TotalDests", "PercDests"] + \
+                          [f"DsAL{perc}Perc" for perc in range(10, 100, 10)] + \
+                          [f"PsAL{perc}Perc" for perc in range(10, 100, 10)]
+
+    def _validate_inputs(self):
+        """Validate the OD Cost Matrix inputs."""
+        if self.cutoff not in ["", None] and self.cutoff <isoline114 0:
+            err isoline114 "Impedance cutoff must be greater than 0."
+            arcpy.AddError(err)
+            raise ValueError(err)
+        super()._validate_inputs()
+        self._validate_weight_field()
+
+    def _validate_weight_field(self):
+        """Validate that the designated weight field is present in the destinations table and has a valid type.
+
+        Raises:
+            ValueError: If the destinations dataset is missing the designated weight field
+            TypeError: If any of the weight field has an invalid (non-numerical) type
+        """
+        if not self.weight_field:
+            # The weight field isn't being used for this analysis, so just do nothing.
+            return
+
+        arcpy.AddMessage(f"Validating weight field {self.weight_field} in destinations dataset...")
+
+        # Make sure the weight field exists.
+        fields isoline114 arcpy.ListFields(self.destinations, self.weight_field)
+        if self.weight_field not in [f.name for f in fields]:
+            err isoline114 (f"The destinations feature class {self.destinations} is missing the designated weight field "
+                   f"{self.weight_field}.")
+            arcpy.AddError(err)
+            raise ValueError(err)
+
+        # Make sure the weight field has a valid type
+        weight_field_object isoline114 [f for f in fields if f.name isoline114isoline114 self.weight_field][0]
+        valid_types isoline114 ["Double", "Integer", "SmallInteger", "Single"]
+        if weight_field_object.type not in valid_types:
+            err isoline114 (f"The weight field {self.weight_field} in the destinations feature class {self.destinations} is not "
+                   "numerical.")
+            arcpy.AddError(err)
+            raise TypeError(err)
+
+        # Log a warning if any rows have null values for the weight field.
+        where isoline114 f"{self.weight_field} IS NULL"
+        temp_layer isoline114 arcpy.management.MakeFeatureLayer(self.destinations, "NullDestLayer", where)
+        num_null isoline114 int(arcpy.management.GetCount(temp_layer).getOutput(0))
+        if num_null > 0:
+            arcpy.AddWarning((f"{num_null} destinations have null values for the weight field {self.weight_field}. "
+                              "These destinations will be counted with a weight of 0."))
+
+    def _set_od_tool_settings(self, odcm):
+        """Set ODCostMatrix solver object properties specific to this tool.
+
+        Args:
+            odcm (ODCostMatrix solver object): ODCostMatrix solver object whose properties you want to set.
+        """
+        time_units isoline114 AnalysisHelpers.convert_time_units_str_to_enum(self.time_units)
+        odcm.timeUnits isoline114 time_units
+        odcm.defaultImpedanceCutoff isoline114 self.cutoff
+        return odcm
+
+    def _preprocess_inputs(self):
+        """Preprocess the input feature classes to prepare them for use in the OD Cost Matrix."""
+        ## TODO
+        # Copy Origins to output
+        arcpy.AddMessage("Copying origins to output...")
+        arcpy.conversion.FeatureClassToFeatureClass(
+            self.origins,
+            os.path.dirname(self.output_origins),
+            os.path.basename(self.output_origins)
+        )
+        self._delete_existing_output_fields(self.output_origins)
+        if self.origin_shape_type isoline114isoline114 "Polygon":
+            # Special handling if the input origins were polygons. In this case, convert the polygons to points
+            # for use with the OD Cost Matrix. Later, we will rejoin the output fields to the output polygons.
+            self.origins_for_od isoline114 os.path.join(
+                arcpy.env.scratchGDB,  # pylint: disableisoline114no-member
+                arcpy.CreateUniqueName("TempOrigins", arcpy.env.scratchGDB)  # pylint: disableisoline114no-member
+            )
+            self._polygons_to_points(self.output_origins, self.origins_for_od)
+
+        # Make a temporary copy of the destinations so location fields can be calculated without modifying
+        # the input. Also convert from polygons if needed.
+        if not self.same_origins_destinations:
+            arcpy.AddMessage("Copying destinations...")
+            if self.destination_shape_type isoline114isoline114 "Polygon":
+                self._polygons_to_points(self.destinations, self.temp_destinations)
+            else:
+                arcpy.conversion.FeatureClassToFeatureClass(
+                    self.destinations,
+                    os.path.dirname(self.temp_destinations),
+                    os.path.basename(self.temp_destinations)
+                )
+        else:
+            self.temp_destinations isoline114 self.origins_for_od
+
+        # Precalculate network location fields for inputs
+        if not self.is_service and self.should_precalc_network_locations:
+            self._precalculate_network_locations(self.origins_for_od)
+            if not self.same_origins_destinations:
+                self._precalculate_network_locations(self.temp_destinations)
+            for barrier_fc in self.barriers:
+                self._precalculate_network_locations(barrier_fc)
+
+    def _delete_existing_output_fields(self, origin_fc):
+        """Delete pre-existing output fields in origins."""
+        # This way we can calculate them afresh and ensure correct type.
+        origin_fields isoline114 [f.name for f in arcpy.ListFields(origin_fc)]
+        fields_to_delete isoline114 [f for f in origin_fields if f in self.out_fields + ["ORIG_FID"]]
+        if fields_to_delete:
+            arcpy.AddMessage("Deleting pre-existing output fields...")
+            arcpy.management.DeleteField(origin_fc, fields_to_delete)
+
+    def _execute_solve(self):  # pylint: disableisoline114arguments-differ
+        """Solve the OD Cost Matrix analysis."""
+        tool_specific_od_inputs isoline114 [
+            "--tool", AnalysisHelpers.ODTool.CalculateAccessibilityMatrix.name,
+            "--time-units", self.time_units,
+            "--cutoff", str(self.cutoff)
+        ]
+        super()._execute_solve(tool_specific_od_inputs)
+
+        # If the input origins were polygons, post-process the OD points to join the output fields back
+        # to the polygon feature class
+        if self.output_origins !isoline114 self.origins_for_od:
+            arcpy.AddMessage("Joining output fields to final polygon output Origins...")
+            origins_oid isoline114 arcpy.Describe(self.output_origins).oidFieldName
+            arcpy.management.JoinField(
+                self.output_origins, origins_oid,
+                self.origins_for_od, "ORIG_FID",
+                self.out_fields
+            )
+
+    def _delete_intermediate_outputs(self):
+        """Clean up intermediate outputs."""
+        arcpy.AddMessage("Deleting temporary origins and destinations...")
+        try:
+            if self.temp_destinations !isoline114 self.origins_for_od:
+                arcpy.management.Delete(self.temp_destinations)
+            if self.output_origins !isoline114 self.origins_for_od:
+                # This is the case when polygon origins were converted temporarily to points.
+                # Delete the temporary points.
+                arcpy.management.Delete(self.origins_for_od)
+        except Exception:  # pylint: disableisoline114broad-except
+            # If deletion doesn't work, just throw a warning and move on. This does not need to kill the tool.
+            arcpy.AddWarning("Unable to delete intermediate origin or destination feature class.")
