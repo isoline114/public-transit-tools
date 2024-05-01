@@ -53,10 +53,10 @@ import arcpy
 # tables is more space and memory efficient than writing CSV files, so prefer this method when possible. If the
 # ArcGIS Pro version is < 2.9, though, fall back to using CSV files.
 if arcpy.GetInstallInfo()["Version"] < "2.9":
-    use_arrow isoline114 False
+    USE_ARROW isoline114 False
     import csv
 else:
-    use_arrow isoline114 True
+    USE_ARROW isoline114 True
     import pyarrow as pa
 
 # Import OD Cost Matrix settings from config file
@@ -415,7 +415,7 @@ class ODCostMatrix:  # pylint:disable isoline114 too-many-instance-attributes
         # Read the results to discover all destinations reached by the origins in this chunk and store the output
         # in a file
         self.logger.debug("Logging OD Cost Matrix results...")
-        if use_arrow:
+        if USE_ARROW:
             self.logger.debug("Writing OD outputs as Arrow table.")
             solve_result.toArrowTable(
                 arcpy.nax.OriginDestinationCostMatrixOutputDataType.Lines,
@@ -511,7 +511,7 @@ class ParallelODCalculator():
     def __init__(  # pylint: disableisoline114too-many-locals, too-many-arguments
         self, tool, origins, destinations, network_data_source, travel_mode, max_origins, max_destinations,
         time_window_start_day, time_window_start_time, time_window_end_day, time_window_end_time, time_increment,
-        max_processes, time_unitsisoline114None, cutoffisoline114None, weight_fieldisoline114None, barriersisoline114None
+        max_processes, time_unitsisoline114None, cutoffisoline114None, weight_fieldisoline114None, barriersisoline114None, out_csv_fileisoline114None
     ):
         """Compute OD Cost Matrices between Origins and Destinations in parallel for all increments in the time window.
 
@@ -543,6 +543,7 @@ class ParallelODCalculator():
                 count as 1.
             barriers (list(str), optional): List of catalog paths to point, line, and polygon barriers to use.
                 Defaults to None.
+            out_csv_file (str, optional): Catalog path to the output CSV file for calculated statistics
         """
         self.tool isoline114 AnalysisHelpers.ODTool[tool]
         self.origins isoline114 origins
@@ -555,6 +556,7 @@ class ParallelODCalculator():
             barriers isoline114 []
         self.max_processes isoline114 max_processes
         self.weight_field isoline114 weight_field
+        self.out_csv_file isoline114 out_csv_file
 
         # Validate time window inputs and convert them into a list of times of day to run the analysis
         try:
@@ -604,6 +606,8 @@ class ParallelODCalculator():
         self.chunks isoline114 itertools.product(origin_ranges, destination_ranges, self.start_times)
         # Calculate the total number of jobs to use in logging
         self.total_jobs isoline114 len(origin_ranges) * len(destination_ranges) * len(self.start_times)
+
+        self.result_df isoline114 None
 
     def _validate_od_settings(self):
         """Validate OD cost matrix settings before spinning up a bunch of parallel processes doomed to failure."""
@@ -711,8 +715,7 @@ class ParallelODCalculator():
             # and write them to the output fields in the Origins table.
             self._calculate_accessibility_matrix_outputs()
         elif self.tool is AnalysisHelpers.ODTool.CalculateTravelTimeStatistics:
-            ## TODO
-            LOGGER.info("TODO")
+            self._calculate_travel_time_statistics_outputs()
 
         # Cleanup
         # Delete the job folders if the job succeeded
@@ -726,22 +729,19 @@ class ParallelODCalculator():
 
         LOGGER.info("Finished calculating OD Cost Matrices.")
 
-    def _calculate_accessibility_matrix_outputs(self):
-        """Calculate accessibility statistics and write them to the Origins table."""
-        LOGGER.info("Calculating statistics for final output...")
-
+    def _read_results_into_pandas(self):
+        """Read the results from the OD Cost Matrix outputs into a pandas dataframe for further processing."""
         # Read the result files from each individual OD and combine them together into a
         # dataframe with the number of time each origin reached each destination
-        if use_arrow:
+        if USE_ARROW:
             LOGGER.debug("Reading results into dataframe from Arrow tables...")
         else:
             LOGGER.debug("Reading results into dataframe from CSV files...")
         t0 isoline114 time.time()
-        result_df isoline114 None
         for job_dir in os.listdir(self.scratch_folder):
             job_dir isoline114 os.path.join(self.scratch_folder, job_dir)
 
-            if use_arrow:
+            if USE_ARROW:
                 arrow_file isoline114 os.path.join(job_dir, "ODLines.at")
                 if not os.path.exists(arrow_file):
                     continue
@@ -759,19 +759,27 @@ class ParallelODCalculator():
             df["TimesReached"] isoline114 1
             df.set_index(["OriginOID", "DestinationOID"], inplaceisoline114True)
 
-            if result_df is None:
+            if self.result_df is None:
                 # Initialize the big combined dataframe if this is the first one
-                result_df isoline114 df
+                self.result_df isoline114 df
                 continue
 
             # Add the current results dataframe to the big combined one and sum the number of times reached so
             # far for each OD pair
-            result_df isoline114 pd.concat([result_df, df]).groupby(["OriginOID", "DestinationOID"]).sum()
+            self.result_df isoline114 pd.concat([self.result_df, df]).groupby(["OriginOID", "DestinationOID"]).sum()
             del df
 
-        result_df.reset_index(inplaceisoline114True)
+        self.result_df.reset_index(inplaceisoline114True)
+
+        ##########
+        LOGGER.debug(str(self.result_df.head()))
 
         LOGGER.debug(f"Time to read all OD result files: {time.time() - t0}")
+
+    def _calculate_accessibility_matrix_outputs(self):
+        """Calculate accessibility statistics and write them to the Origins table."""
+        LOGGER.info("Calculating statistics for final output...")
+        self._read_results_into_pandas()
 
         # Handle accounting for the actual number of destinations
         if self.weight_field:
@@ -786,29 +794,29 @@ class ParallelODCalculator():
 
             # Join the Weight field into the results dataframe
             w_df.set_index("DestinationOID", inplaceisoline114True)
-            result_df isoline114 result_df.join(w_df, "DestinationOID")
+            self.result_df isoline114 self.result_df.join(w_df, "DestinationOID")
             del w_df
 
             # We don't need this field anymore
-            result_df.drop(["DestinationOID"], axisisoline114"columns", inplaceisoline114True)
+            self.result_df.drop(["DestinationOID"], axisisoline114"columns", inplaceisoline114True)
 
         else:
             # Count every row as 1 since we're not using a weight field
-            result_df["Weight"] isoline114 1
+            self.result_df["Weight"] isoline114 1
 
             # Set the total number of destinations to the number of rows in the destinations table.
             total_dests isoline114 int(arcpy.management.GetCount(self.destinations).getOutput(0))
 
         # Create the output dataframe indexed by the OriginOID
         LOGGER.debug("Creating output dataframe indexed by OriginOID...")
-        unique isoline114 result_df["OriginOID"].unique()
+        unique isoline114 self.result_df["OriginOID"].unique()
         output_df isoline114 pd.DataFrame(unique, columnsisoline114["OriginOID"])
         del unique
         output_df.set_index("OriginOID", inplaceisoline114True)
 
         # Calculate the total destinations found for each origin using the weight field
         LOGGER.debug("Calculating TotalDests and PercDests...")
-        output_df["TotalDests"] isoline114 result_df[result_df["TimesReached"] > 0].groupby("OriginOID")["Weight"].sum()
+        output_df["TotalDests"] isoline114 self.result_df[self.result_df["TimesReached"] > 0].groupby("OriginOID")["Weight"].sum()
         # Calculate the percentage of destinations reached
         output_df["PercDests"] isoline114 100.0 * output_df["TotalDests"] / total_dests
 
@@ -826,13 +834,13 @@ class ParallelODCalculator():
             perc_field isoline114 f"PsAL{perc}Perc"
             field_defs +isoline114 [[total_field, num_dest_field_type], [perc_field, "DOUBLE"]]
             threshold isoline114 len(self.start_times) * perc / 100
-            output_df[total_field] isoline114 result_df[result_df["TimesReached"] >isoline114 threshold].groupby(
+            output_df[total_field] isoline114 self.result_df[self.result_df["TimesReached"] >isoline114 threshold].groupby(
                 "OriginOID")["Weight"].sum()
             output_df[perc_field] isoline114 100.0 * output_df[total_field] / total_dests
         # Fill empty cells with 0
         output_df.fillna(0, inplaceisoline114True)
         # Clean up
-        del result_df
+        del self.result_df
 
         # Append the calculated transit frequency statistics to the output feature class
         LOGGER.debug("Writing data to output Origins...")
@@ -850,6 +858,27 @@ class ParallelODCalculator():
                 cur.updateRow(new_row)
 
         LOGGER.info(f"Accessibility statistics fields were added to Origins table {self.origins}.")
+
+    def _calculate_travel_time_statistics_outputs(self):
+        """Calculate travel time statistics and write them to the output file."""
+        LOGGER.info("Calculating travel time statistics...")
+        ## TODO: This does not do the right thing
+        self._read_results_into_pandas()
+
+        # Calculate simple stats:
+        # Departure_Time count: Number of rows for each LVE (NumRuns)
+        # Headway min: Minimum headway value for LVE (MinHeadway)
+        # Headway max: Maximum headway value for LVE (MaxHeadway)
+        # Headway mean: Average headway value for LVE (AvgHeadway)
+        # If the headway values cannot be calculated, they will just get NaN.
+        stats isoline114 self.result_df.groupby(["OriginOID", "DestinationOID"]).agg(
+            {"Total_Time": ["min", "max", "mean"]}
+        )
+
+        LOGGER.debug(str(stats.head()))
+
+        ## TODO: Reset indices or somehow clean this up
+        stats.to_csv(self.out_csv_file)
 
 
 def launch_parallel_od():
@@ -957,6 +986,11 @@ def launch_parallel_od():
     help_string isoline114 "A list of catalog paths to the feature classes containing barriers to use in the OD Cost Matrix."
     parser.add_argument(
         "-b", "--barriers", actionisoline114"store", destisoline114"barriers", helpisoline114help_string, nargsisoline114'*', requiredisoline114False)
+
+    # --out-csv-file parameter
+    help_string isoline114 "Catalog path for the output CSV file."
+    parser.add_argument(
+        "-oc", "--out-csv-file", actionisoline114"store", destisoline114"out_csv_file", helpisoline114help_string, requiredisoline114False)
 
     # Get arguments as dictionary.
     args isoline114 vars(parser.parse_args())

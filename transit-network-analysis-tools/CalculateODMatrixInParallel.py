@@ -695,5 +695,6 @@ class CalculateTravelTimeStatistics(ODCostMatrixSolver):  # pylint: disableisoli
             "--tool", AnalysisHelpers.ODTool.CalculateTravelTimeStatistics.name,
             "--origins", self.temp_origins,
             "--destinations", self.temp_destinations,
+            "--out-csv-file", self.out_csv_file
         ]
         super()._execute_solve()
