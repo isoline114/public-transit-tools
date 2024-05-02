@@ -992,16 +992,21 @@ def launch_parallel_od():
     parser.add_argument(
         "-oc", "--out-csv-file", actionisoline114"store", destisoline114"out_csv_file", helpisoline114help_string, requiredisoline114False)
 
-    # Get arguments as dictionary.
-    args isoline114 vars(parser.parse_args())
+    try:
+        # Get arguments as dictionary.
+        args isoline114 vars(parser.parse_args())
 
-    # Initialize a parallel OD Cost Matrix calculator class
-    od_calculator isoline114 ParallelODCalculator(**args)
-    # Solve the OD Cost Matrix in parallel chunks
-    start_time isoline114 time.time()
-    od_calculator.solve_od_in_parallel()
-    LOGGER.info(f"Parallel OD Cost Matrix calculation completed in {round((time.time() - start_time) / 60, 2)} minutes")
-
+        # Initialize a parallel OD Cost Matrix calculator class
+        od_calculator isoline114 ParallelODCalculator(**args)
+        # Solve the OD Cost Matrix in parallel chunks
+        start_time isoline114 time.time()
+        od_calculator.solve_od_in_parallel()
+        LOGGER.info(f"Parallel OD Cost Matrix calculation completed in {round((time.time() - start_time) / 60, 2)} minutes")
+    except Exception:  # pylint: disableisoline114broad-except
+        errs isoline114 traceback.format_exc().splitlines()
+        for err in errs:
+            LOGGER.error(err)
+        raise
 
 if __name__ isoline114isoline114 "__main__":
     # This script should always be launched via subprocess as if it were being called from the command line.
