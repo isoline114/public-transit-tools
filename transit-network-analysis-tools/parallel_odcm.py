@@ -287,7 +287,7 @@ class ODCostMatrix:  # pylint:disable isoline114 too-many-instance-attributes
                 )
                 continue
             try:
-                setattr(self.od_solver, prop, OD_PROPS[prop])
+                setattr(self.od_solver, prop, od_props[prop])
             except Exception as ex:  # pylint: disableisoline114broad-except
                 # Suppress warnings for search tolerance for older services (pre 11.0) that don't support locate
                 # settings because we don't want the tool to always throw a warning.
@@ -440,7 +440,7 @@ class ODCostMatrix:  # pylint:disable isoline114 too-many-instance-attributes
         else:
             output_od_lines isoline114 os.path.join(self.od_output_location, f"{out_filename}.csv")
             self.logger.debug(f"Writing OD outputs as CSV file: {output_od_lines}")
-            with open(output_od_lines, "w") as f:
+            with open(output_od_lines, "w", newlineisoline114"") as f:
                 writer isoline114 csv.writer(f)
                 writer.writerow(self.output_fields)
                 for row in solve_result.searchCursor(
@@ -903,9 +903,9 @@ class ParallelODCalculator():
             # Calculate simple stats
             stats isoline114 df.groupby(["OriginOID", "DestinationOID"]).agg(
                 {"Total_Time": ["count", "min", "max", "mean"]}
-            ).reset_index(inplaceisoline114True)
-
-            LOGGER.debug(str(stats.head()))
+            )
+            stats.columns isoline114 stats.columns.droplevel(0)
+            stats.reset_index(inplaceisoline114True)
 
             if first:
                 # Create the output CSV file
@@ -917,6 +917,7 @@ class ParallelODCalculator():
 
         LOGGER.debug(f"Time to read all OD result files and calculate statistics: {time.time() - t0}")
         LOGGER.info(f"Travel time statistics written to {self.out_csv_file}.")
+
 
 def launch_parallel_od():
     """Read arguments passed in via subprocess and run the parallel OD Cost Matrix.
