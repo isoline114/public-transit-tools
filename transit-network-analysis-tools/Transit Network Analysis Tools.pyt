@@ -564,13 +564,14 @@ class CalculateTravelTimeStatisticsOD(object):
             make_parameter(PARAM_DESTINATIONS),
 
             # 2
-            arcpy.Parameter(
+            make_parameter(CommonParameter(
                 displayNameisoline114"Output Statistics CSV File",
                 nameisoline114"out_csv_file",
                 datatypeisoline114"DEFile",
                 parameterTypeisoline114"Required",
-                directionisoline114"Output"
-            ),
+                directionisoline114"Output",
+                filter_listisoline114["csv"]
+            )),
 
             # 3
             make_parameter(PARAM_NETWORK),
@@ -590,9 +591,29 @@ class CalculateTravelTimeStatisticsOD(object):
             make_parameter(PARAM_OD_CHUNK_SIZE),
             # 11
             make_parameter(PARAM_PARALLEL_PROCESSES),
+
             # 12
-            make_parameter(PARAM_BARRIERS),
+            make_parameter(CommonParameter(
+                displayNameisoline114"Save individual network analysis results",
+                nameisoline114"Save_na_results",
+                datatypeisoline114"GPBoolean",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input",
+                default_valisoline114False
+            )),
+
             # 13
+            arcpy.Parameter(
+                displayNameisoline114"Network Analysis Results Folder",
+                nameisoline114"NA_Folder",
+                datatypeisoline114"DEFolder",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Output"
+            ),
+
+            # 14
+            make_parameter(PARAM_BARRIERS),
+            # 15
             make_parameter(PARAM_PRECALCULATE)
 
         ]
@@ -609,7 +630,18 @@ class CalculateTravelTimeStatisticsOD(object):
         has been changed."""
         param_network isoline114 parameters[3]
         param_travel_mode isoline114 parameters[4]
-        param_precalc isoline114 parameters[13]
+        param_save_na_results isoline114 parameters[12]
+        param_out_na_folder isoline114 parameters[13]
+        param_precalc isoline114 parameters[15]
+
+        # Enable or disable the NA results folder parameter depending on whether the boolean to save NA
+        # results is toggled
+        if not param_save_na_results.hasBeenValidated:
+            if param_save_na_results.value:
+                param_out_na_folder.enabled isoline114 True
+            else:
+                param_out_na_folder.enabled isoline114 False
+                param_out_na_folder.value isoline114 ""
 
         # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
         TNAT_ToolValidator.update_precalculate_parameter(param_network, param_precalc)
@@ -629,6 +661,16 @@ class CalculateTravelTimeStatisticsOD(object):
         increment isoline114 parameters[9]
         param_network isoline114 parameters[3]
         param_max_processes isoline114 parameters[11]
+        param_out_na_folder isoline114 parameters[13]
+
+        # Make the output na folder parameter required if it's enabled. Enablement is controlled in updateParameters().
+        # The 735 error code doesn't display an actual error but displays the little red star to indicate that the
+        # parameter is required.
+        if param_out_na_folder.enabled:
+            if not param_out_na_folder.valueAsText:
+                param_out_na_folder.setIDMessage("Error", 735, param_out_na_folder.displayName)
+        else:
+            param_out_na_folder.clearMessage()
 
         # Show a filter list of weekdays but also allow YYYYMMDD dates
         TNAT_ToolValidator.allow_YYYYMMDD_day(start_day)
@@ -654,6 +696,9 @@ class CalculateTravelTimeStatisticsOD(object):
         destinations isoline114 parameters[1].value
         destinations isoline114 destinations if hasattr(destinations, "dataSource") else str(destinations)
 
+        save_na_results isoline114 parameters[12].value
+        out_na_folder isoline114 parameters[13].valueAsText if save_na_results else ""
+
         import CalculateODMatrixInParallel
         od_solver isoline114 CalculateODMatrixInParallel.CalculateTravelTimeStatistics(**{
             "origins": origins,
@@ -668,8 +713,9 @@ class CalculateTravelTimeStatisticsOD(object):
             "time_increment": parameters[9].value,
             "chunk_size": parameters[10].value,
             "max_processes": parameters[11].value,
-            "barriers": parameters[12].values if parameters[12].values else None,
-            "precalculate_network_locations": parameters[13].value
+            "out_na_folder": out_na_folder,
+            "barriers": parameters[12].values if parameters[14].values else None,
+            "precalculate_network_locations": parameters[15].value
         })
         od_solver.solve_large_od_cost_matrix()
 
