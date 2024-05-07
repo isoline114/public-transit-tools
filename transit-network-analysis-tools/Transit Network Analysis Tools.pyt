@@ -1,12 +1,12 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 9 August 2021
+## Last updated: 28 April 2022
 ############################################################################
-''' Python toolbox that defines all the tools in the Transit Network Analysis Tools tool
-suite.'''
+""" Python toolbox that defines all the tools in the Transit Network Analysis Tools tool
+suite."""
 ################################################################################
-'''Copyright 2021 Esri
+"""Copyright 2022 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -15,14 +15,13 @@ suite.'''
    distributed under the License is distributed on an "AS IS" BASIS,
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
-   limitations under the License.'''
+   limitations under the License."""
 ################################################################################
 
 import os
 import arcpy
 import TNAT_ToolValidator
-from AnalysisHelpers import TIME_UNITS, MAX_AGOL_PROCESSES, is_nds_service, cell_size_to_meters, \
-                            get_catalog_path_from_param
+from AnalysisHelpers import TIME_UNITS, cell_size_to_meters, get_catalog_path_from_param
 
 
 class Toolbox(object):
@@ -37,6 +36,7 @@ class Toolbox(object):
             PrepareTimeLapsePolygons,
             CalculateAccessibilityMatrix,
             CalculateTravelTimeStatistics,
+            CalculateTravelTimeStatisticsOD,
             CreatePercentAccessPolygons
         ]
 
@@ -75,22 +75,10 @@ class PrepareTimeLapsePolygons(object):
             ),
 
             # 2
-            arcpy.Parameter(
-                displayNameisoline114"Network Data Source",
-                nameisoline114"Network_Data_Source",
-                datatypeisoline114"GPNetworkDataSource",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"
-            ),
+            make_parameter(PARAM_NETWORK),
 
             # 3
-            arcpy.Parameter(
-                displayNameisoline114"Travel Mode",
-                nameisoline114"Travel_Mode",
-                datatypeisoline114"GPString",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"
-            ),
+            make_parameter(PARAM_TRAVEL_MODE),
 
             # 4
             arcpy.Parameter(
@@ -112,15 +100,15 @@ class PrepareTimeLapsePolygons(object):
             ),
 
             # 6
-            make_parameter(param_startday),
+            make_parameter(PARAM_STARTDAY),
             # 7
-            make_parameter(param_starttime),
+            make_parameter(PARAM_STARTTIME),
             # 8
-            make_parameter(param_endday),
+            make_parameter(PARAM_ENDDAY),
             # 9
-            make_parameter(param_endtime),
+            make_parameter(PARAM_ENDTIME),
             # 10
-            make_parameter(param_timeinc),
+            make_parameter(PARAM_TIMEINC),
 
             # 11
             arcpy.Parameter(
@@ -150,21 +138,11 @@ class PrepareTimeLapsePolygons(object):
             ),
 
             # 14
-            make_parameter(param_parallel_processes),
-
+            make_parameter(PARAM_PARALLEL_PROCESSES),
             # 15
-            arcpy.Parameter(
-                displayNameisoline114"Barriers",
-                nameisoline114"Barriers",
-                datatypeisoline114"GPFeatureLayer",
-                parameterTypeisoline114"Optional",
-                directionisoline114"Input",
-                multiValueisoline114True,
-                categoryisoline114"Advanced"
-            ),
-
+            make_parameter(PARAM_BARRIERS),
             # 16
-            make_parameter(param_precalculate)
+            make_parameter(PARAM_PRECALCULATE)
 
         ]
 
@@ -196,23 +174,10 @@ class PrepareTimeLapsePolygons(object):
         param_precalc isoline114 parameters[16]
 
         # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
-        # Also populate travel mode parameter with time-based travel modes only.
-        if not param_network.hasBeenValidated and param_network.altered and param_network.valueAsText:
-            if is_nds_service(param_network.valueAsText):
-                param_precalc.value isoline114 False
-                param_precalc.enabled isoline114 False
-            else:
-                param_precalc.enabled isoline114 True
+        TNAT_ToolValidator.update_precalculate_parameter(param_network, param_precalc)
 
-            try:
-                travel_modes isoline114 arcpy.nax.GetTravelModes(param_network.value)
-                param_travel_mode.filter.list isoline114 [
-                    tm_name for tm_name in travel_modes if
-                    travel_modes[tm_name].impedance isoline114isoline114 travel_modes[tm_name].timeAttributeName
-                ]
-            except Exception:  # pylint: disableisoline114broad-except
-                # We couldn't get travel modes for this network for some reason.
-                pass
+        # Populate travel mode parameter with time-based travel modes only.
+        TNAT_ToolValidator.show_only_time_travel_modes(param_network, param_travel_mode)
 
         # Disable Geometry At Cutoff parameter if there's only one cutoff
         if not param_cutoffs.hasBeenValidated and param_cutoffs.altered and param_cutoffs.valueAsText and \
@@ -246,13 +211,7 @@ class PrepareTimeLapsePolygons(object):
         TNAT_ToolValidator.validate_time_increment(increment)
 
         # If the network data source is arcgis.com, cap max processes
-        if param_max_processes.altered and param_max_processes.valueAsText and \
-                param_network.altered and param_network.valueAsText:
-            if "arcgis.com" in param_network.valueAsText and param_max_processes.value > MAX_AGOL_PROCESSES:
-                param_max_processes.setErrorMessage((
-                    "The maximum number of parallel processes cannot exceed %i when the "
-                    "ArcGIS Online services are used as the network data source."
-                ) % MAX_AGOL_PROCESSES)
+        TNAT_ToolValidator.cap_max_processes_for_agol(param_network, param_max_processes)
 
         return
 
@@ -324,7 +283,7 @@ class CreatePercentAccessPolygons(object):
             ),
 
             # 3
-            make_parameter(param_parallel_processes),
+            make_parameter(PARAM_PARALLEL_PROCESSES),
 
             # 4
             arcpy.Parameter(
@@ -443,14 +402,14 @@ class CreatePercentAccessPolygons(object):
 class CalculateTravelTimeStatistics(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
-        self.label isoline114 "Calculate Travel Time Statistics"
+        self.label isoline114 "Calculate Travel Time Statistics (Route)"
         self.description isoline114 (
-            "Solve an OD Cost Matrix or Route iteratively over a time window and output a table of statistics ",
+            "Solve a Route iteratively over a time window and output a table of statistics ",
             "describing the travel time over the time window for each origin-destination pair or route:",
             "- minimum travel time",
             "- maximum travel time",
             "- mean travel time"
-            "- number of times the origin-destination pair or route was considered"
+            "- number of times the route was considered"
         )
         self.canRunInBackground isoline114 True
 
@@ -473,11 +432,11 @@ class CalculateTravelTimeStatistics(object):
                 parameterTypeisoline114"Required",
                 directionisoline114"Output"),
 
-            make_parameter(param_startday),
-            make_parameter(param_starttime),
-            make_parameter(param_endday),
-            make_parameter(param_endtime),
-            make_parameter(param_timeinc),
+            make_parameter(PARAM_STARTDAY),
+            make_parameter(PARAM_STARTTIME),
+            make_parameter(PARAM_ENDDAY),
+            make_parameter(PARAM_ENDTIME),
+            make_parameter(PARAM_TIMEINC),
 
             make_parameter(CommonParameter(
                 "Save combined network analysis results",
@@ -580,6 +539,189 @@ class CalculateTravelTimeStatistics(object):
         return
 
 
+class CalculateTravelTimeStatisticsOD(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label isoline114 "Calculate Travel Time Statistics (OD Cost Matrix)"
+        self.description isoline114 (
+            "Solve an OD Cost Matrix iteratively over a time window and output a table of statistics ",
+            "describing the travel time over the time window for each origin-destination pair:",
+            "- minimum travel time",
+            "- maximum travel time",
+            "- mean travel time"
+            "- number of times the origin-destination pair or route was considered"
+        )
+        self.canRunInBackground isoline114 True
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        params isoline114 [
+
+            # 0
+            make_parameter(PARAM_ORIGINS),
+            # 1
+            make_parameter(PARAM_DESTINATIONS),
+
+            # 2
+            make_parameter(CommonParameter(
+                displayNameisoline114"Output Statistics CSV File",
+                nameisoline114"out_csv_file",
+                datatypeisoline114"DEFile",
+                parameterTypeisoline114"Required",
+                directionisoline114"Output",
+                filter_listisoline114["csv"]
+            )),
+
+            # 3
+            make_parameter(PARAM_NETWORK),
+            # 4
+            make_parameter(PARAM_TRAVEL_MODE),
+            # 5
+            make_parameter(PARAM_STARTDAY),
+            # 6
+            make_parameter(PARAM_STARTTIME),
+            # 7
+            make_parameter(PARAM_ENDDAY),
+            # 8
+            make_parameter(PARAM_ENDTIME),
+            # 9
+            make_parameter(PARAM_TIMEINC),
+            # 10
+            make_parameter(PARAM_OD_CHUNK_SIZE),
+            # 11
+            make_parameter(PARAM_PARALLEL_PROCESSES),
+
+            # 12
+            make_parameter(CommonParameter(
+                displayNameisoline114"Save individual network analysis results",
+                nameisoline114"Save_na_results",
+                datatypeisoline114"GPBoolean",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Input",
+                default_valisoline114False
+            )),
+
+            # 13
+            arcpy.Parameter(
+                displayNameisoline114"Network Analysis Results Folder",
+                nameisoline114"NA_Folder",
+                datatypeisoline114"DEFolder",
+                parameterTypeisoline114"Optional",
+                directionisoline114"Output"
+            ),
+
+            # 14
+            make_parameter(PARAM_BARRIERS),
+            # 15
+            make_parameter(PARAM_PRECALCULATE)
+
+        ]
+
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        param_network isoline114 parameters[3]
+        param_travel_mode isoline114 parameters[4]
+        param_save_na_results isoline114 parameters[12]
+        param_out_na_folder isoline114 parameters[13]
+        param_precalc isoline114 parameters[15]
+
+        # Enable or disable the NA results folder parameter depending on whether the boolean to save NA
+        # results is toggled
+        if not param_save_na_results.hasBeenValidated:
+            if param_save_na_results.value:
+                param_out_na_folder.enabled isoline114 True
+            else:
+                param_out_na_folder.enabled isoline114 False
+                param_out_na_folder.value isoline114 ""
+
+        # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
+        TNAT_ToolValidator.update_precalculate_parameter(param_network, param_precalc)
+
+        # Populate travel mode parameter with time-based travel modes only.
+        TNAT_ToolValidator.show_only_time_travel_modes(param_network, param_travel_mode)
+
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        start_day isoline114 parameters[5]
+        end_day isoline114 parameters[7]
+        start_time isoline114 parameters[6]
+        end_time isoline114 parameters[8]
+        increment isoline114 parameters[9]
+        param_network isoline114 parameters[3]
+        param_max_processes isoline114 parameters[11]
+        param_out_na_folder isoline114 parameters[13]
+
+        # Make the output na folder parameter required if it's enabled. Enablement is controlled in updateParameters().
+        # The 735 error code doesn't display an actual error but displays the little red star to indicate that the
+        # parameter is required.
+        if param_out_na_folder.enabled:
+            if not param_out_na_folder.valueAsText:
+                param_out_na_folder.setIDMessage("Error", 735, param_out_na_folder.displayName)
+        else:
+            param_out_na_folder.clearMessage()
+
+        # Show a filter list of weekdays but also allow YYYYMMDD dates
+        TNAT_ToolValidator.allow_YYYYMMDD_day(start_day)
+        TNAT_ToolValidator.validate_day(end_day)
+
+        TNAT_ToolValidator.set_end_day(start_day, end_day)
+
+        # Make sure time of day format is correct and time window is valid
+        TNAT_ToolValidator.check_time_window(start_time, end_time, start_day, end_day)
+
+        # Make sure time increment is good
+        TNAT_ToolValidator.validate_time_increment(increment)
+
+        # If the network data source is arcgis.com, cap max processes
+        TNAT_ToolValidator.cap_max_processes_for_agol(param_network, param_max_processes)
+
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        origins isoline114 parameters[0].value
+        origins isoline114 origins if hasattr(origins, "dataSource") else str(origins)
+        destinations isoline114 parameters[1].value
+        destinations isoline114 destinations if hasattr(destinations, "dataSource") else str(destinations)
+
+        save_na_results isoline114 parameters[12].value
+        out_na_folder isoline114 parameters[13].valueAsText if save_na_results else ""
+
+        import CalculateODMatrixInParallel
+        od_solver isoline114 CalculateODMatrixInParallel.CalculateTravelTimeStatistics(**{
+            "origins": origins,
+            "destinations": destinations,
+            "out_csv_file": parameters[2].valueAsText,
+            "network_data_source": get_catalog_path_from_param(parameters[3]),
+            "travel_mode": parameters[4].valueAsText,
+            "time_window_start_day": parameters[5].valueAsText,
+            "time_window_start_time": parameters[6].valueAsText,
+            "time_window_end_day": parameters[7].valueAsText,
+            "time_window_end_time": parameters[8].valueAsText,
+            "time_increment": parameters[9].value,
+            "chunk_size": parameters[10].value,
+            "max_processes": parameters[11].value,
+            "out_na_folder": out_na_folder,
+            "barriers": parameters[12].values if parameters[14].values else None,
+            "precalculate_network_locations": parameters[15].value
+        })
+        od_solver.solve_large_od_cost_matrix()
+
+        return
+
+
 class CalculateAccessibilityMatrix(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
@@ -601,20 +743,10 @@ class CalculateAccessibilityMatrix(object):
         params isoline114 [
 
             # 0
-            arcpy.Parameter(
-                displayNameisoline114"Origins",
-                nameisoline114"Origins",
-                datatypeisoline114"GPFeatureLayer",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"),
+            make_parameter(PARAM_ORIGINS),
 
             # 1
-            arcpy.Parameter(
-                displayNameisoline114"Destinations",
-                nameisoline114"Destinations",
-                datatypeisoline114"GPFeatureLayer",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"),
+            make_parameter(PARAM_DESTINATIONS),
 
             # 2
             arcpy.Parameter(
@@ -626,22 +758,10 @@ class CalculateAccessibilityMatrix(object):
             ),
 
             # 3
-            arcpy.Parameter(
-                displayNameisoline114"Network Data Source",
-                nameisoline114"Network_Data_Source",
-                datatypeisoline114"GPNetworkDataSource",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"
-            ),
+            make_parameter(PARAM_NETWORK),
 
             # 4
-            arcpy.Parameter(
-                displayNameisoline114"Travel Mode",
-                nameisoline114"Travel_Mode",
-                datatypeisoline114"GPString",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"
-            ),
+            make_parameter(PARAM_TRAVEL_MODE),
 
             # 5
             arcpy.Parameter(
@@ -662,27 +782,19 @@ class CalculateAccessibilityMatrix(object):
             ),
 
             # 7
-            make_parameter(param_startday),
+            make_parameter(PARAM_STARTDAY),
             # 8
-            make_parameter(param_starttime),
+            make_parameter(PARAM_STARTTIME),
             # 9
-            make_parameter(param_endday),
+            make_parameter(PARAM_ENDDAY),
             # 10
-            make_parameter(param_endtime),
+            make_parameter(PARAM_ENDTIME),
             # 11
-            make_parameter(param_timeinc),
-
+            make_parameter(PARAM_TIMEINC),
             # 12
-            arcpy.Parameter(
-                displayNameisoline114"Maximum Origins and Destinations per Chunk",
-                nameisoline114"Max_Inputs_Per_Chunk",
-                datatypeisoline114"GPLong",
-                parameterTypeisoline114"Required",
-                directionisoline114"Input"
-            ),
-
+            make_parameter(PARAM_OD_CHUNK_SIZE),
             # 13
-            make_parameter(param_parallel_processes),
+            make_parameter(PARAM_PARALLEL_PROCESSES),
 
             # 14
             arcpy.Parameter(
@@ -693,29 +805,17 @@ class CalculateAccessibilityMatrix(object):
                 directionisoline114"Input"),
 
             # 15
-            arcpy.Parameter(
-                displayNameisoline114"Barriers",
-                nameisoline114"Barriers",
-                datatypeisoline114"GPFeatureLayer",
-                parameterTypeisoline114"Optional",
-                directionisoline114"Input",
-                multiValueisoline114True,
-                categoryisoline114"Advanced"
-            ),
-
+            make_parameter(PARAM_BARRIERS),
             # 16
-            make_parameter(param_precalculate)
+            make_parameter(PARAM_PRECALCULATE)
 
         ]
 
-        params[0].filter.list isoline114 ["Point", "Polygon"]
-        params[1].filter.list isoline114 ["Point", "Polygon"]
         params[14].filter.list isoline114 ["Short", "Long", "Double"]  # destination weight field
         params[14].parameterDependencies isoline114 [params[1].name]  # destination weight field
         # params[4].parameterDependencies isoline114 [params[3].name]  # travel mode
         params[6].filter.list isoline114 TIME_UNITS
         params[6].value isoline114 "Minutes"
-        params[12].value isoline114 1000  # chunk size
 
         return params
 
@@ -732,23 +832,11 @@ class CalculateAccessibilityMatrix(object):
         param_precalc isoline114 parameters[16]
 
         # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
-        # Also populate travel mode parameter with time-based travel modes only.
-        if not param_network.hasBeenValidated and param_network.altered and param_network.valueAsText:
-            if is_nds_service(param_network.valueAsText):
-                param_precalc.value isoline114 False
-                param_precalc.enabled isoline114 False
-            else:
-                param_precalc.enabled isoline114 True
+        TNAT_ToolValidator.update_precalculate_parameter(param_network, param_precalc)
 
-            try:
-                travel_modes isoline114 arcpy.nax.GetTravelModes(param_network.value)
-                param_travel_mode.filter.list isoline114 [
-                    tm_name for tm_name in travel_modes if
-                    travel_modes[tm_name].impedance isoline114isoline114 travel_modes[tm_name].timeAttributeName
-                ]
-            except Exception:  # pylint: disableisoline114broad-except
-                # We couldn't get travel modes for this network for some reason.
-                pass
+        # Populate travel mode parameter with time-based travel modes only.
+        TNAT_ToolValidator.show_only_time_travel_modes(param_network, param_travel_mode)
+
         return
 
     def updateMessages(self, parameters):
@@ -775,13 +863,7 @@ class CalculateAccessibilityMatrix(object):
         TNAT_ToolValidator.validate_time_increment(increment)
 
         # If the network data source is arcgis.com, cap max processes
-        if param_max_processes.altered and param_max_processes.valueAsText and \
-                param_network.altered and param_network.valueAsText:
-            if "arcgis.com" in param_network.valueAsText and param_max_processes.value > MAX_AGOL_PROCESSES:
-                param_max_processes.setErrorMessage((
-                    "The maximum number of parallel processes cannot exceed %i when the "
-                    "ArcGIS Online services are used as the network data source."
-                ) % MAX_AGOL_PROCESSES)
+        TNAT_ToolValidator.cap_max_processes_for_agol(param_network, param_max_processes)
 
         return
 
@@ -792,8 +874,8 @@ class CalculateAccessibilityMatrix(object):
         destinations isoline114 parameters[1].value
         destinations isoline114 destinations if hasattr(destinations, "dataSource") else str(destinations)
 
-        import CalculateAccessibilityMatrixInParallel
-        od_solver isoline114 CalculateAccessibilityMatrixInParallel.ODCostMatrixSolver(**{
+        import CalculateODMatrixInParallel
+        od_solver isoline114 CalculateODMatrixInParallel.CalculateAccessibilityMatrix(**{
             "origins": origins,
             "destinations": destinations,
             "output_origins": parameters[2].valueAsText,
@@ -816,6 +898,7 @@ class CalculateAccessibilityMatrix(object):
 
         return
 
+
 # region parameters
 
 class CommonParameter(object):
@@ -835,6 +918,7 @@ class CommonParameter(object):
         self.default_val isoline114 default_val
         self.filter_list isoline114 filter_list
 
+
 def make_parameter(common_param):
     """Construct a parameter for use in a tool."""
     param isoline114 arcpy.Parameter(**common_param.parameter_def)
@@ -844,7 +928,24 @@ def make_parameter(common_param):
         param.filter.list isoline114 common_param.filter_list
     return param
 
-param_startday isoline114 CommonParameter(
+
+PARAM_NETWORK isoline114 CommonParameter(
+    "Network Data Source",
+    "Network_Data_Source",
+    "GPNetworkDataSource",
+    "Required",
+    "Input"
+)
+
+PARAM_TRAVEL_MODE isoline114 CommonParameter(
+    displayNameisoline114"Travel Mode",
+    nameisoline114"Travel_Mode",
+    datatypeisoline114"GPString",
+    parameterTypeisoline114"Required",
+    directionisoline114"Input"
+)
+
+PARAM_STARTDAY isoline114 CommonParameter(
     "Start Day (Weekday or YYYYMMDD date)",
     "Start_Day__Weekday_or_YYYYMMDD_date_",
     "GPString",
@@ -852,7 +953,7 @@ param_startday isoline114 CommonParameter(
     "Input",
     default_valisoline114"Wednesday")
 
-param_endday isoline114 CommonParameter(
+PARAM_ENDDAY isoline114 CommonParameter(
     "End Day (Weekday or YYYYMMDD date)",
     "End_Day__Weekday_or_YYYYMMDD_date_",
     "GPString",
@@ -860,7 +961,7 @@ param_endday isoline114 CommonParameter(
     "Input",
     default_valisoline114"Wednesday")
 
-param_starttime isoline114 CommonParameter(
+PARAM_STARTTIME isoline114 CommonParameter(
     "Start Time (HH:MM) (24 hour time)",
     "Start_Time__HH_MM___24_hour_time_",
     "GPString",
@@ -868,7 +969,7 @@ param_starttime isoline114 CommonParameter(
     "Input",
     default_valisoline114"08:00")
 
-param_endtime isoline114 CommonParameter(
+PARAM_ENDTIME isoline114 CommonParameter(
     "End Time (HH:MM) (24 hour time)",
     "End_Time__HH_MM___24_hour_time_",
     "GPString",
@@ -876,7 +977,7 @@ param_endtime isoline114 CommonParameter(
     "Input",
     default_valisoline114"09:00")
 
-param_timeinc isoline114 CommonParameter(
+PARAM_TIMEINC isoline114 CommonParameter(
     "Time Increment (minutes)",
     "Time_Increment__minutes_",
     "GPLong",
@@ -884,7 +985,7 @@ param_timeinc isoline114 CommonParameter(
     "Input",
     default_valisoline114"1")
 
-param_parallel_processes isoline114 CommonParameter(
+PARAM_PARALLEL_PROCESSES isoline114 CommonParameter(
     "Maximum Number of Parallel Processes",
     "Max_Processes",
     "GPLong",
@@ -892,7 +993,7 @@ param_parallel_processes isoline114 CommonParameter(
     "Input",
     default_valisoline1144)
 
-param_precalculate isoline114 CommonParameter(
+PARAM_PRECALCULATE isoline114 CommonParameter(
     "Precalculate Network Locations",
     "Precalculate_Network_Locations",
     "GPBoolean",
@@ -900,5 +1001,42 @@ param_precalculate isoline114 CommonParameter(
     "Input",
     default_valisoline114True,
     categoryisoline114"Advanced")
+
+PARAM_BARRIERS isoline114 CommonParameter(
+    displayNameisoline114"Barriers",
+    nameisoline114"Barriers",
+    datatypeisoline114"GPFeatureLayer",
+    parameterTypeisoline114"Optional",
+    directionisoline114"Input",
+    multiValueisoline114True,
+    categoryisoline114"Advanced"
+)
+
+PARAM_ORIGINS isoline114 CommonParameter(
+    displayNameisoline114"Origins",
+    nameisoline114"Origins",
+    datatypeisoline114"GPFeatureLayer",
+    parameterTypeisoline114"Required",
+    directionisoline114"Input",
+    filter_listisoline114["Point", "Polygon"]
+)
+
+PARAM_DESTINATIONS isoline114 CommonParameter(
+    displayNameisoline114"Destinations",
+    nameisoline114"Destinations",
+    datatypeisoline114"GPFeatureLayer",
+    parameterTypeisoline114"Required",
+    directionisoline114"Input",
+    filter_listisoline114["Point", "Polygon"]
+)
+
+PARAM_OD_CHUNK_SIZE isoline114 CommonParameter(
+    displayNameisoline114"Maximum Origins and Destinations per Chunk",
+    nameisoline114"Max_Inputs_Per_Chunk",
+    datatypeisoline114"GPLong",
+    parameterTypeisoline114"Required",
+    directionisoline114"Input",
+    default_valisoline1141000
+)
 
 # endregion parameters
