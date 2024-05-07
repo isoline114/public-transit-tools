@@ -606,7 +606,8 @@ class CalculateAccessibilityMatrix(ODCostMatrixSolver):  # pylint: disableisolin
             "--origins", self.origins_for_od,
             "--destinations", self.temp_destinations,
             "--time-units", self.time_units,
-            "--cutoff", str(self.cutoff)
+            "--cutoff", str(self.cutoff),
+            "--weight-field", self.weight_field
         ]
         super()._execute_solve()
 
