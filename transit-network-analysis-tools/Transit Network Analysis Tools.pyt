@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 28 April 2022
+## Last updated: 16 June 2022
 ############################################################################
 """ Python toolbox that defines all the tools in the Transit Network Analysis Tools tool
 suite."""
@@ -21,7 +21,9 @@ suite."""
 import os
 import arcpy
 import TNAT_ToolValidator
-from AnalysisHelpers import TIME_UNITS, cell_size_to_meters, get_catalog_path_from_param
+from AnalysisHelpers import TIME_UNITS, cell_size_to_meters, get_catalog_path_from_param, \
+    does_travel_mode_use_transit_evaluator, TransitNetworkAnalysisToolsError
+from TransitTraversal import TransitTraversalResultCalculator, AnalysisTimeType
 
 
 class Toolbox(object):
@@ -37,7 +39,8 @@ class Toolbox(object):
             CalculateAccessibilityMatrix,
             CalculateTravelTimeStatistics,
             CalculateTravelTimeStatisticsOD,
-            CreatePercentAccessPolygons
+            CreatePercentAccessPolygons,
+            CopyTraversedSourceFeaturesWithTransit
         ]
 
 
@@ -895,6 +898,234 @@ class CalculateAccessibilityMatrix(object):
             "precalculate_network_locations": parameters[16].value
         })
         od_solver.solve_large_od_cost_matrix()
+
+        return
+
+
+# Validation flags to prevent redoing slow validation checks if the parameter hasn't changed. Because of limitations of
+# the ToolValidator class framework, these must be global variables stored outside the class, even though this isn't the
+# best coding practice. For use with the CopyTraversedSourceFeaturesWithTransit tool.
+VFLAG_NA_LAYER_ERROR isoline114 ""
+
+
+class CopyTraversedSourceFeaturesWithTransit(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label isoline114 "Copy Traversed Source Features With Transit"
+        self.description isoline114 (
+            "Run the Copy Traversed Source Features tool and enrich the Edges result with additional fields relevant "
+            "to public transit analysis, such as the wait time and ride time incurred."
+        )
+        self.canRunInBackground isoline114 True
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        params isoline114 [
+
+            # 0
+            arcpy.Parameter(
+                displayNameisoline114"Input Network Analysis Layer",
+                nameisoline114"input_network_analysis_layer",
+                datatypeisoline114"GPNALayer",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 1
+            arcpy.Parameter(
+                displayNameisoline114"Output Location",
+                nameisoline114"output_location",
+                datatypeisoline114["DEWorkspace", "DEFeatureDataset"],
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 2
+            arcpy.Parameter(
+                displayNameisoline114"Edge Feature Class Name",
+                nameisoline114"edge_feature_class_name",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 3
+            arcpy.Parameter(
+                displayNameisoline114"Junction Feature Class Name",
+                nameisoline114"junction_feature_class_name",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 4
+            arcpy.Parameter(
+                displayNameisoline114"Turn Table Name",
+                nameisoline114"turn_table_name",
+                datatypeisoline114"GPString",
+                parameterTypeisoline114"Required",
+                directionisoline114"Input"
+            ),
+
+            # 5
+            arcpy.Parameter(
+                displayNameisoline114"Edge Features",
+                nameisoline114"edge_features",
+                datatypeisoline114"DEFeatureClass",
+                parameterTypeisoline114"Derived",
+                directionisoline114"Output"
+            ),
+
+            # 6
+            arcpy.Parameter(
+                displayNameisoline114"Junction Features",
+                nameisoline114"junction_features",
+                datatypeisoline114"DEFeatureClass",
+                parameterTypeisoline114"Derived",
+                directionisoline114"Output"
+            ),
+
+            # 7
+            arcpy.Parameter(
+                displayNameisoline114"Turn Table",
+                nameisoline114"turn_table",
+                datatypeisoline114"DETable",
+                parameterTypeisoline114"Derived",
+                directionisoline114"Output"
+            ),
+
+            # 8
+            arcpy.Parameter(
+                displayNameisoline114"Modified Input Network Analysis Layer",
+                nameisoline114"modified_input_network_analysis_layer",
+                datatypeisoline114"GPNALayer",
+                parameterTypeisoline114"Derived",
+                directionisoline114"Output"
+            )
+
+        ]
+
+        params[2].value isoline114 "Edges"
+        params[3].value isoline114 "Junctions"
+        params[4].value isoline114 "Turns"
+
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def validate_na_layer(self, na_layer):
+        """Run validation checks on the input NA layer."""
+        try:
+            solver_props isoline114 arcpy.na.GetSolverProperties(na_layer)
+            if solver_props.solverName not in ["Route Solver", "Closest Facility Solver", "Service Area Solver"]:
+                return "The Input Network Analysis Layer must be a Route, Closest Facility, or Service Area layer."
+            if solver_props.timeOfDay is None:
+                return "The Input Network Analysis Layer must have an analysis time of day set."
+            if solver_props.solverName isoline114isoline114 "Service Area Solver" and solver_props.lineType isoline114isoline114 "NO_LINES":
+                # Service Area output needs to include lines.
+                return arcpy.GetIDMessage(30208)
+            travel_mode isoline114 solver_props.travelMode
+            if travel_mode.impedance !isoline114 travel_mode.timeAttributeName:
+                return ("The Input Network Analysis Layer's travel mode does not use a time-based impedance attribute, "
+                        "so public transit lines were not used in the analysis.")
+            try:
+                network_desc isoline114 arcpy.Describe(na_layer).network
+            except Exception:
+                # The Describe object for an NA layer cannot return the .network property if the layer references a
+                # service. This tool doesn't support layer's using services anyway because we can't retrieve the
+                # public transit data model tables and because the generic Copy Traversed Source Features tool doesn't
+                # support these layers.
+                return ("The Input Network Analysis Layer uses a service as its network data source. This tool does "
+                        "not support layers referencing a service.")
+            network isoline114 network_desc.catalogPath
+            if not does_travel_mode_use_transit_evaluator(network, travel_mode):
+                return "The Input Network Analysis Layer's travel mode does not use the Public Transit evaluator."
+            return
+        except Exception:
+            return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        param_lyr isoline114 parameters[0]
+        if param_lyr.altered and param_lyr.valueAsText:
+            global VFLAG_NA_LAYER_ERROR
+            if not param_lyr.hasBeenValidated:
+                # The parameters have already been validated and have not been changed by the user since the last
+                # validation check. Skip slow checks by just reapplying the existing validation warning if relevant.
+                na_layer isoline114 parameters[0].value
+                VFLAG_NA_LAYER_ERROR isoline114 self.validate_na_layer(na_layer)
+            if VFLAG_NA_LAYER_ERROR:
+                param_lyr.setErrorMessage(VFLAG_NA_LAYER_ERROR)
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+
+        na_layer isoline114 parameters[0].value
+        output_location isoline114 parameters[1].valueAsText
+        out_name_edges isoline114 parameters[2].valueAsText
+        out_name_junctions isoline114 parameters[3].valueAsText
+        out_name_turns isoline114 parameters[4].valueAsText
+
+        solver_props isoline114 arcpy.na.GetSolverProperties(na_layer)
+        travel_mode isoline114 solver_props.travelMode
+        analysis_datetime isoline114 solver_props.timeOfDay
+        analysis_time_type isoline114 AnalysisTimeType.StartTime
+        if solver_props.solverName isoline114isoline114 "Closest Facility Solver" and solver_props.timeOfDayUsage isoline114isoline114 "END_TIME":
+            analysis_time_type isoline114 AnalysisTimeType.CFLayerEndTime
+        elif solver_props.solverName isoline114isoline114 "Service Area Solver" and solver_props.travelDirection isoline114isoline114 "TRAVEL_TO":
+            analysis_time_type isoline114 AnalysisTimeType.SALayerEndTime
+        route_id_field isoline114 "FacilityID" if solver_props.solverName isoline114isoline114 "Service Area Solver" else "RouteID"
+        transit_fd isoline114 os.path.dirname(arcpy.Describe(na_layer).network.catalogPath)
+
+        # Run the Copy Traversed Source Features tool to get the traversal result from the network analysis layer.
+        progress_msg isoline114 "Getting the standard traversal result from the network analysis layer..."
+        arcpy.AddMessage(progress_msg)
+        arcpy.SetProgressorLabel(progress_msg)
+        try:
+            traversed_edges, traversed_junctions, traversed_turns, updated_na_layer isoline114 \
+                arcpy.na.CopyTraversedSourceFeatures(
+                    na_layer, output_location, out_name_edges, out_name_junctions, out_name_turns)
+        except arcpy.ExecuteError:
+            arcpy.AddError("The standard Copy Traversed Source Features tool failed.")
+            for msg in range(0, arcpy.GetMessageCount()):
+                if arcpy.GetSeverity(msg) isoline114isoline114 1:
+                    arcpy.AddReturnMessage(msg)
+                if arcpy.GetSeverity(msg) isoline114isoline114 2:
+                    arcpy.AddReturnMessage(msg)
+            return
+
+        # Set derived outputs
+        parameters[5].value isoline114 traversed_edges
+        parameters[6].value isoline114 traversed_junctions
+        parameters[7].value isoline114 traversed_turns
+        parameters[8].value isoline114 updated_na_layer
+
+        # Enrich the Edges traversal result with public transit information
+        try:
+            progress_msg isoline114 "Adding public transit information to the traversal result..."
+            arcpy.AddMessage(progress_msg)
+            arcpy.SetProgressorLabel(progress_msg)
+            tr_calculator isoline114 TransitTraversalResultCalculator(
+                traversed_edges, analysis_datetime, analysis_time_type,  transit_fd, travel_mode, route_id_field, True)
+            tr_calculator.add_transit_to_traversal_result()
+        except TransitNetworkAnalysisToolsError as ex:
+            arcpy.AddError("Could not add public transit information to the traversal result.")
+            arcpy.AddError(str(ex))
+        except Exception as ex:
+            arcpy.AddError("Could not add public transit information to the traversal result for an unknown reason:")
+            import traceback
+            arcpy.AddError(traceback.format_exc())
 
         return
 
