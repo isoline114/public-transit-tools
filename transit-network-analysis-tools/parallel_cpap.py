@@ -268,7 +268,14 @@ if __name__ isoline114isoline114 "__main__":
     args isoline114 vars(parser.parse_args())
 
     # Count intersecting percent access polygon cells in parallel
-    start_time isoline114 time.time()
-    count_percent_access_polygons(**args)
-    run_time isoline114 round((time.time() - start_time) / 60, 2)
-    LOGGER.info(f"Parallel percent access polygon cell calculation completed in {run_time} minutes")
+    try:
+        start_time isoline114 time.time()
+        count_percent_access_polygons(**args)
+        run_time isoline114 round((time.time() - start_time) / 60, 2)
+        LOGGER.info(f"Parallel percent access polygon cell calculation completed in {run_time} minutes")
+
+    except Exception:  # pylint: disableisoline114broad-except
+        errs isoline114 traceback.format_exc().splitlines()
+        for err in errs:
+            LOGGER.error(err)
+        raise

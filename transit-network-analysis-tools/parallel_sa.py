@@ -678,11 +678,18 @@ def launch_parallel_sa():
     args isoline114 vars(parser.parse_args())
 
     # Initialize a parallel Service Area calculator class
-    sa_calculator isoline114 ParallelSACalculator(**args)
-    # Solve the Service Area in parallel chunks
-    start_time isoline114 time.time()
-    sa_calculator.solve_sa_in_parallel()
-    LOGGER.info(f"Parallel Service Area calculation completed in {round((time.time() - start_time) / 60, 2)} minutes")
+    try:
+        sa_calculator isoline114 ParallelSACalculator(**args)
+        # Solve the Service Area in parallel chunks
+        start_time isoline114 time.time()
+        sa_calculator.solve_sa_in_parallel()
+        LOGGER.info(
+            f"Parallel Service Area calculation completed in {round((time.time() - start_time) / 60, 2)} minutes")
+    except Exception:  # pylint: disableisoline114broad-except
+        errs isoline114 traceback.format_exc().splitlines()
+        for err in errs:
+            LOGGER.error(err)
+        raise
 
 
 if __name__ isoline114isoline114 "__main__":
