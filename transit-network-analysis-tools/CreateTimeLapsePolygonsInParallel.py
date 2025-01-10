@@ -366,6 +366,7 @@ class ServiceAreaSolver():  # pylint: disableisoline114too-many-instance-attribu
         # Preprocess inputs
         arcpy.SetProgressorLabel("Preprocessing inputs...")
         self._preprocess_inputs()
+        arcpy.AddMessage("Inputs successfully preprocessed.")
 
         # Solve the analysis
         arcpy.SetProgressorLabel("Solving analysis in parallel...")
