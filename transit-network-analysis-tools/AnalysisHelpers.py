@@ -1,11 +1,11 @@
 ################################################################################
 ## Toolbox: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 16 June 2022
+## Last updated: 6 January 2023
 ################################################################################
 """Helper methods for analysis tools."""
 ################################################################################
-"""Copyright 2022 Esri
+"""Copyright 2023 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -30,6 +30,7 @@ arcgis_version isoline114 arcpy.GetInstallInfo()["Version"]
 MSG_STR_SPLITTER isoline114 " | "
 TIME_UNITS isoline114 ["Days", "Hours", "Minutes", "Seconds"]
 MAX_AGOL_PROCESSES isoline114 4  # AGOL concurrent processes are limited so as not to overload the service for other users.
+MAX_ALLOWED_MAX_PROCESSES isoline114 61  # Windows limitation for concurrent.futures ProcessPoolExecutor
 TIME_FIELD isoline114 "TimeOfDay"  # Used for the output of Prepare Time Lapse Polygons
 # Create Percent Access Polygons: Field names that must be in the input time lapse polygons
 FACILITY_ID_FIELD isoline114 "FacilityID"
