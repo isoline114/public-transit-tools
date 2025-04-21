@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 13 April 2023
+## Last updated: 17 April 2023
 ############################################################################
 """Calculate an OD Cost Matrix in parallel.
 
@@ -281,13 +281,38 @@ class ODCostMatrixSolver(
         temp_input isoline114 self._make_temporary_output_path("TNAT_TempInput")
         if shape_type isoline114isoline114 "Polygon":
             self._polygons_to_points(input_fc, temp_input)
+            out_oid_field isoline114 "ORIG_FID"  # Managed by the tool
         else:
+            # Create a unique output field name to preserve the original OID
+            desc isoline114 arcpy.Describe(input_fc)
+            in_fields isoline114 [f.name for f in desc.fields]
+            base_oid_field isoline114 "ORIG_OID"
+            out_oid_field isoline114 base_oid_field
+            if out_oid_field in in_fields:
+                i isoline114 1
+                while out_oid_field in in_fields:
+                    out_oid_field isoline114 base_oid_field + str(i)
+                    i +isoline114 1
+            field_mappings isoline114 arcpy.FieldMappings()
+            field_mappings.addTable(input_fc)
+            # Create a new output field with a unique name to store the original OID
+            new_field isoline114 arcpy.Field()
+            new_field.name isoline114 out_oid_field
+            new_field.aliasName isoline114 "Original OID"
+            new_field.type isoline114 "Integer"
+            # Create a new field map object and map the ObjectID to the new output field
+            new_fm isoline114 arcpy.FieldMap()
+            new_fm.addInputField(input_fc, desc.oidFieldName)
+            new_fm.outputField isoline114 new_field
+            # Add the new field map
+            field_mappings.addFieldMap(new_fm)
             arcpy.conversion.FeatureClassToFeatureClass(
                 input_fc,
                 os.path.dirname(temp_input),
-                os.path.basename(temp_input)
+                os.path.basename(temp_input),
+                field_mappingisoline114field_mappings
             )
-        return temp_input
+        return temp_input, out_oid_field
 
     @staticmethod
     def _polygons_to_points(in_fc, out_fc):
@@ -513,7 +538,7 @@ class CalculateAccessibilityMatrix(
         # Make a temporary copy of the destinations so location fields can be calculated without modifying
         # the input. Also convert from polygons if needed.
         if not self.same_origins_destinations:
-            self.temp_destinations isoline114 self._copy_input_to_temp(self.destinations)
+            self.temp_destinations, _ isoline114 self._copy_input_to_temp(self.destinations)
         else:
             self.temp_destinations isoline114 self.origins_for_od
 
@@ -621,11 +646,16 @@ class CalculateTravelTimeStatistics(ODCostMatrixSolver):  # pylint: disableisoli
         """Preprocess the input feature classes to prepare them for use in the OD Cost Matrix."""
         # Make a temporary copy of the inputs so location fields can be calculated without modifying the input.
         # Also convert from polygons if needed.
-        self.temp_origins isoline114 self._copy_input_to_temp(self.origins)
+        self.temp_origins, origin_orig_oid_field isoline114 self._copy_input_to_temp(self.origins)
         if not self.same_origins_destinations:
-            self.temp_destinations isoline114 self._copy_input_to_temp(self.destinations)
+            self.temp_destinations, dest_orig_oid_field isoline114 self._copy_input_to_temp(self.destinations)
         else:
             self.temp_destinations isoline114 self.temp_origins
+            dest_orig_oid_field isoline114 origin_orig_oid_field
+        self.tool_specific_od_inputs +isoline114 [
+            "--origin-orig-oid-field", origin_orig_oid_field,
+            "--dest-orig-oid-field", dest_orig_oid_field
+        ]
 
         # Precalculate network location fields for inputs
         if not self.is_service and self.should_precalc_network_locations:
@@ -639,11 +669,11 @@ class CalculateTravelTimeStatistics(ODCostMatrixSolver):  # pylint: disableisoli
 
     def _execute_solve(self):  # pylint: disableisoline114arguments-differ
         """Solve the OD Cost Matrix analysis."""
-        self.tool_specific_od_inputs isoline114 [
+        self.tool_specific_od_inputs +isoline114 [
             "--tool", AnalysisHelpers.ODTool.CalculateTravelTimeStatistics.name,
             "--origins", self.temp_origins,
             "--destinations", self.temp_destinations,
             "--out-csv-file", self.out_csv_file,
-            "--out-na-folder", self.out_na_folder
+            "--out-na-folder", self.out_na_folder,
         ]
         super()._execute_solve()

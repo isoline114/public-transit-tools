@@ -479,7 +479,7 @@ class ParallelODCalculator():
         self, tool, origins, destinations, network_data_source, travel_mode, max_origins, max_destinations,
         time_window_start_day, time_window_start_time, time_window_end_day, time_window_end_time, time_increment,
         max_processes, time_unitsisoline114None, cutoffisoline114None, weight_fieldisoline114None, barriersisoline114None,
-        out_csv_fileisoline114None, out_na_folderisoline114None
+        out_csv_fileisoline114None, out_na_folderisoline114None, origin_orig_oid_fieldisoline114None, dest_orig_oid_fieldisoline114None
     ):
         """Compute OD Cost Matrices between Origins and Destinations in parallel for all increments in the time window.
 
@@ -528,6 +528,8 @@ class ParallelODCalculator():
             LOGGER.warning("A weight field is not supported for this tool and will be ignored.")
             self.weight_field isoline114 None
         self.out_csv_file isoline114 out_csv_file
+        self.origin_orig_oid_field isoline114 origin_orig_oid_field
+        self.dest_orig_oid_field isoline114 dest_orig_oid_field
 
         # Validate time window inputs and convert them into a list of times of day to run the analysis
         try:
@@ -871,6 +873,20 @@ class ParallelODCalculator():
         LOGGER.info("Calculating travel time statistics...")
         t0 isoline114 time.time()
 
+        # Create mappings to the original OID field values, which might have changed during preprocessing
+        o_map isoline114 {}
+        d_map isoline114 {}
+        if self.origin_orig_oid_field:
+            for row in arcpy.da.SearchCursor(  # pylint: disableisoline114no-member
+                self.origins, ["OID@", self.origin_orig_oid_field]
+            ):
+                o_map[row[0]] isoline114 row[1]
+        if self.dest_orig_oid_field:
+            for row in arcpy.da.SearchCursor(  # pylint: disableisoline114no-member
+                self.destinations, ["OID@", self.dest_orig_oid_field]
+            ):
+                d_map[row[0]] isoline114 row[1]
+
         # Clean up any existing output if necessary
         if os.path.exists(self.out_csv_file):
             os.remove(self.out_csv_file)
@@ -900,6 +916,12 @@ class ParallelODCalculator():
             )
             stats.columns isoline114 stats.columns.droplevel(0)
             stats.reset_index(inplaceisoline114True)
+
+            # Remap OIDs if necessary
+            if o_map:
+                stats.replace({"OriginOID": o_map}, inplaceisoline114True)
+            if d_map:
+                stats.replace({"DestinationOID": d_map}, inplaceisoline114True)
 
             if first:
                 # Create the output CSV file
@@ -1028,6 +1050,18 @@ def launch_parallel_od():
     help_string isoline114 "Catalog path for a folder to store the outputs of the network analysis."
     parser.add_argument(
         "-of", "--out-na-folder", actionisoline114"store", destisoline114"out_na_folder", helpisoline114help_string, requiredisoline114False)
+
+    # --origin-orig-oid-field parameter
+    help_string isoline114 "Name of field holding the values of the original origin input's OIDs."
+    parser.add_argument(
+        "-ooid", "--origin-orig-oid-field", actionisoline114"store", destisoline114"origin_orig_oid_field", helpisoline114help_string,
+        requiredisoline114False)
+
+    # --dest-orig-oid-field parameter
+    help_string isoline114 "Name of field holding the values of the original destination input's OIDs."
+    parser.add_argument(
+        "-doid", "--dest-orig-oid-field", actionisoline114"store", destisoline114"dest_orig_oid_field", helpisoline114help_string,
+        requiredisoline114False)
 
     try:
         # Get arguments as dictionary.
