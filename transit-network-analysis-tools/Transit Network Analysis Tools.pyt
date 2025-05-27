@@ -22,7 +22,7 @@ import os
 import arcpy
 import TNAT_ToolValidator
 from AnalysisHelpers import TIME_UNITS, cell_size_to_meters, get_catalog_path_from_param, \
-    does_travel_mode_use_transit_evaluator, TransitNetworkAnalysisToolsError
+    does_travel_mode_use_transit_evaluator, TransitNetworkAnalysisToolsError, arcgis_version
 from TransitTraversal import TransitTraversalResultCalculator, AnalysisTimeType
 
 
@@ -150,7 +150,11 @@ class PrepareTimeLapsePolygons(object):
         ]
 
         params[0].filter.list isoline114 ["Point"]
-        # params[4].parameterDependencies isoline114 [params[3].name]  # travel mode
+        params[3].parameterDependencies isoline114 [params[2].name]  # travel mode
+        if arcgis_version >isoline114 "3.0":
+            # Prior to 3.0, a bug prevented the travel mode parameter unit type filter list from working,
+            # so don't try to use it in older software.
+            params[3].filter.list isoline114 ["Time"]
         params[5].filter.list isoline114 TIME_UNITS
         params[5].value isoline114 "Minutes"
         params[11].filter.list isoline114 ["Away From Facilities", "Toward Facilities"]
@@ -171,16 +175,12 @@ class PrepareTimeLapsePolygons(object):
         validation is performed.  This method is called whenever a parameter
         has been changed."""
         param_network isoline114 parameters[2]
-        param_travel_mode isoline114 parameters[3]
         param_cutoffs isoline114 parameters[4]
         param_geom_at_cutoffs isoline114 parameters[12]
         param_precalc isoline114 parameters[16]
 
         # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
         TNAT_ToolValidator.update_precalculate_parameter(param_network, param_precalc)
-
-        # Populate travel mode parameter with time-based travel modes only.
-        TNAT_ToolValidator.show_only_time_travel_modes(param_network, param_travel_mode)
 
         # Disable Geometry At Cutoff parameter if there's only one cutoff
         if not param_cutoffs.hasBeenValidated and param_cutoffs.altered and param_cutoffs.valueAsText and \
@@ -225,7 +225,7 @@ class PrepareTimeLapsePolygons(object):
             "facilities": parameters[0].value,
             "output_polygons": parameters[1].valueAsText,
             "network_data_source": get_catalog_path_from_param(parameters[2]),
-            "travel_mode": parameters[3].valueAsText,
+            "travel_mode": parameters[3].value,
             "cutoffs": parameters[4].values,
             "time_units": parameters[5].valueAsText,
             "time_window_start_day": parameters[6].valueAsText,
@@ -526,12 +526,6 @@ class CalculateTravelTimeStatistics(object):
         saveCombined isoline114 parameters[7].value
         combinedOutFC isoline114 parameters[8].valueAsText
 
-        # For some reason there are problems passing layer objects through in ArcMap when the input is a map layer,
-        # so create a fresh layer object from it.
-        if not TNAT_ToolValidator.ispy3:
-            if not isinstance(NAlayer, (unicode, str)):
-                NAlayer isoline114 arcpy.mapping.Layer(NAlayer.name)
-
         CalculateTravelTimeStats.runTool(
             NAlayer,
             out_table,
@@ -625,6 +619,12 @@ class CalculateTravelTimeStatisticsOD(object):
 
         ]
 
+        params[4].parameterDependencies isoline114 [params[3].name]  # travel mode
+        if arcgis_version >isoline114 "3.0":
+            # Prior to 3.0, a bug prevented the travel mode parameter unit type filter list from working,
+            # so don't try to use it in older software.
+            params[4].filter.list isoline114 ["Time"]
+
         return params
 
     def isLicensed(self):
@@ -636,7 +636,6 @@ class CalculateTravelTimeStatisticsOD(object):
         validation is performed.  This method is called whenever a parameter
         has been changed."""
         param_network isoline114 parameters[3]
-        param_travel_mode isoline114 parameters[4]
         param_save_na_results isoline114 parameters[12]
         param_out_na_folder isoline114 parameters[13]
         param_precalc isoline114 parameters[15]
@@ -652,9 +651,6 @@ class CalculateTravelTimeStatisticsOD(object):
 
         # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
         TNAT_ToolValidator.update_precalculate_parameter(param_network, param_precalc)
-
-        # Populate travel mode parameter with time-based travel modes only.
-        TNAT_ToolValidator.show_only_time_travel_modes(param_network, param_travel_mode)
 
         return
 
@@ -712,7 +708,7 @@ class CalculateTravelTimeStatisticsOD(object):
             "destinations": destinations,
             "out_csv_file": parameters[2].valueAsText,
             "network_data_source": get_catalog_path_from_param(parameters[3]),
-            "travel_mode": parameters[4].valueAsText,
+            "travel_mode": parameters[4].value,
             "time_window_start_day": parameters[5].valueAsText,
             "time_window_start_time": parameters[6].valueAsText,
             "time_window_end_day": parameters[7].valueAsText,
@@ -820,7 +816,11 @@ class CalculateAccessibilityMatrix(object):
 
         params[14].filter.list isoline114 ["Short", "Long", "Double"]  # destination weight field
         params[14].parameterDependencies isoline114 [params[1].name]  # destination weight field
-        # params[4].parameterDependencies isoline114 [params[3].name]  # travel mode
+        params[4].parameterDependencies isoline114 [params[3].name]  # travel mode
+        if arcgis_version >isoline114 "3.0":
+            # Prior to 3.0, a bug prevented the travel mode parameter unit type filter list from working,
+            # so don't try to use it in older software.
+            params[4].filter.list isoline114 ["Time"]
         params[6].filter.list isoline114 TIME_UNITS
         params[6].value isoline114 "Minutes"
 
@@ -835,14 +835,10 @@ class CalculateAccessibilityMatrix(object):
         validation is performed.  This method is called whenever a parameter
         has been changed."""
         param_network isoline114 parameters[3]
-        param_travel_mode isoline114 parameters[4]
         param_precalc isoline114 parameters[16]
 
         # Turn off and hide Precalculate Network Locations parameter if the network data source is a service
         TNAT_ToolValidator.update_precalculate_parameter(param_network, param_precalc)
-
-        # Populate travel mode parameter with time-based travel modes only.
-        TNAT_ToolValidator.show_only_time_travel_modes(param_network, param_travel_mode)
 
         return
 
@@ -887,7 +883,7 @@ class CalculateAccessibilityMatrix(object):
             "destinations": destinations,
             "output_origins": parameters[2].valueAsText,
             "network_data_source": get_catalog_path_from_param(parameters[3]),
-            "travel_mode": parameters[4].valueAsText,
+            "travel_mode": parameters[4].value,
             "cutoff": parameters[5].value,
             "time_units": parameters[6].valueAsText,
             "time_window_start_day": parameters[7].valueAsText,
@@ -1175,7 +1171,7 @@ PARAM_NETWORK isoline114 CommonParameter(
 PARAM_TRAVEL_MODE isoline114 CommonParameter(
     displayNameisoline114"Travel Mode",
     nameisoline114"Travel_Mode",
-    datatypeisoline114"GPString",
+    datatypeisoline114"NetworkTravelMode",
     parameterTypeisoline114"Required",
     directionisoline114"Input"
 )
