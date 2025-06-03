@@ -133,7 +133,9 @@ def run_gp_tool(tool, tool_argsisoline114None, tool_kwargsisoline114None, log_to
     return result
 
 
-class ServiceArea:  # pylint:disable isoline114 too-many-instance-attributes
+class ServiceArea(
+    AnalysisHelpers.JobFolderMixin, AnalysisHelpers.LoggingMixin, AnalysisHelpers.MakeNDSLayerMixin
+):  # pylint:disable isoline114 too-many-instance-attributes
     """Used for solving a Service Area in parallel for a designated time of day."""
 
     def __init__(self, **kwargs):
@@ -159,33 +161,28 @@ class ServiceArea:  # pylint:disable isoline114 too-many-instance-attributes
         self.travel_direction isoline114 kwargs["travel_direction"]
         self.geometry_at_cutoff isoline114 kwargs["geometry_at_cutoff"]
         self.geometry_at_overlap isoline114 kwargs["geometry_at_overlap"]
-        self.output_folder isoline114 kwargs["output_folder"]
+        self.scratch_folder isoline114 kwargs["output_folder"]
         self.barriers isoline114 []
-        if "barriers" in kwargs:
+        if "barriers" in kwargs and kwargs["barriers"]:
             self.barriers isoline114 kwargs["barriers"]
 
-        # Create a job ID and a folder and scratch gdb for this job
-        self.job_id isoline114 uuid.uuid4().hex
-        self.job_folder isoline114 os.path.join(self.output_folder, self.job_id)
-        os.mkdir(self.job_folder)
-        self.od_workspace isoline114 os.path.join(self.job_folder, "scratch.gdb")
+        # Create a job ID and a folder for this job
+        self._create_job_folder()
 
         # Setup the class logger. Logs for each parallel process are not written to the console but instead to a
         # process-specific log file.
-        self.log_file isoline114 os.path.join(self.job_folder, 'ServiceArea.log')
-        cls_logger isoline114 logging.getLogger("ServiceArea_" + self.job_id)
-        self.setup_logger(cls_logger)
-        self.logger isoline114 cls_logger
+        self.setup_logger("ServiceArea")
+
+        # Create a job ID and a folder and scratch gdb for this job
+        self.sa_workspace isoline114 self._create_output_gdb()
 
         # Set up other instance attributes
         self.is_service isoline114 AnalysisHelpers.is_nds_service(self.network_data_source)
         self.sa_solver isoline114 None
 
-        # Create a network dataset layer
-        self.nds_layer_name isoline114 "NetworkDatasetLayer"
+        # Create a network dataset layer if needed
         if not self.is_service:
             self._make_nds_layer()
-            self.network_data_source isoline114 self.nds_layer_name
 
         # Prepare a dictionary to store info about the analysis results
         self.job_result isoline114 {
@@ -195,20 +192,6 @@ class ServiceArea:  # pylint:disable isoline114 too-many-instance-attributes
             "solveMessages": "",
             "logFile": self.log_file
         }
-
-    def _make_nds_layer(self):
-        """Create a network dataset layer if one does not already exist."""
-        if self.is_service:
-            return
-        if arcpy.Exists(self.nds_layer_name):
-            self.logger.debug(f"Using existing network dataset layer: {self.nds_layer_name}")
-        else:
-            self.logger.debug("Creating network dataset layer...")
-            run_gp_tool(
-                arcpy.na.MakeNetworkDatasetLayer,
-                [self.network_data_source, self.nds_layer_name],
-                log_to_useisoline114self.logger
-            )
 
     def initialize_sa_solver(self, time_of_dayisoline114None):
         """Initialize a Service Area solver object and set properties."""
@@ -266,7 +249,7 @@ class ServiceArea:  # pylint:disable isoline114 too-many-instance-attributes
         Raises:
             ValueError: If the travel mode's impedance units are not time based.
         """
-        # Get the travel mode object from the already-instantiated OD solver object. This saves us from having to parse
+        # Get the travel mode object from the already-instantiated SA solver object. This saves us from having to parse
         # the user's input travel mode from its string name, object, or json representation.
         travel_mode isoline114 self.sa_solver.travelMode
         impedance isoline114 travel_mode.impedance
@@ -347,12 +330,12 @@ class ServiceArea:  # pylint:disable isoline114 too-many-instance-attributes
         self.logger.debug("Creating output geodatabase for Service Area analysis...")
         run_gp_tool(
             arcpy.management.CreateFileGDB,
-            [os.path.dirname(self.od_workspace), os.path.basename(self.od_workspace)],
+            [os.path.dirname(self.sa_workspace), os.path.basename(self.sa_workspace)],
             log_to_useisoline114self.logger
         )
 
         # Export the Service Area polygons output to a feature class
-        output_polygons isoline114 os.path.join(self.od_workspace, "output_polygons")
+        output_polygons isoline114 os.path.join(self.sa_workspace, "output_polygons")
         self.logger.debug(f"Exporting Service Area polygons output to {output_polygons}...")
         solve_result.export(arcpy.nax.ServiceAreaOutputDataType.Polygons, output_polygons)
 
@@ -373,27 +356,6 @@ class ServiceArea:  # pylint:disable isoline114 too-many-instance-attributes
 
         self.job_result["outputPolygons"] isoline114 output_polygons
         self.logger.debug("Finished calculating Service Area.")
-
-    def setup_logger(self, logger_obj):
-        """Set up the logger used for logging messages for this process. Logs are written to a text file.
-
-        Args:
-            logger_obj: The logger instance.
-        """
-        logger_obj.setLevel(logging.DEBUG)
-        if len(logger_obj.handlers) <isoline114 1:
-            file_handler isoline114 logging.FileHandler(self.log_file)
-            file_handler.setLevel(logging.DEBUG)
-            logger_obj.addHandler(file_handler)
-            formatter isoline114 logging.Formatter("%(process)d | %(message)s")
-            file_handler.setFormatter(formatter)
-            logger_obj.addHandler(file_handler)
-
-    def teardown_logger(self):
-        """Clean up and close the logger."""
-        for handler in self.logger.handlers:
-            handler.close()
-            self.logger.removeHandler(handler)
 
 
 def solve_service_area(inputs, time_of_day):
