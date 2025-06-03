@@ -264,7 +264,6 @@ class ServiceAreaSolver():  # pylint: disableisoline114too-many-instance-attribu
         """Solve the Service Area analysis."""
         # Launch the parallel_sa script as a subprocess so it can spawn parallel processes. We have to do this because
         # a tool running in the Pro UI cannot call concurrent.futures without opening multiple instances of Pro.
-        cwd isoline114 os.path.dirname(os.path.abspath(__file__))
         sa_inputs isoline114 [
             "--facilities", self.temp_facilities,
             "--output-polygons", self.output_polygons,
