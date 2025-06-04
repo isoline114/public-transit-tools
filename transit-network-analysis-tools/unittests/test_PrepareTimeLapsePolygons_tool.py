@@ -51,7 +51,7 @@ class TestPrepareTimeLapsePolygonsTool(unittest.TestCase):
         """Test the tool."""
         out_fc isoline114 os.path.join(self.output_gdb, "TimeLapsePolys")
         # Use a custom travel mode object
-        tm isoline114 arcpy.nax.GetTravelModes(self.local_nd)["Public transit time"]
+        tm isoline114 arcpy.nax.TravelMode(arcpy.nax.GetTravelModes(self.local_nd)["Public transit time"])
         attr_params isoline114 tm.attributeParameters
         attr_params[('PublicTransitTime', 'Exclude lines')] isoline114 "1"
         tm.attributeParameters isoline114 attr_params
