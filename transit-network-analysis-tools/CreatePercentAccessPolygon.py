@@ -172,7 +172,7 @@ class PercentAccessPolygonCalculator():
             while process.poll() is None:
                 output isoline114 process.stdout.readline()
                 if output:
-                    msg_string isoline114 output.strip().decode()
+                    msg_string isoline114 output.strip().decode(encodingisoline114"utf-8")
                     AnalysisHelpers.parse_std_and_write_to_gp_ui(msg_string)
                 time.sleep(.1)
 
@@ -181,7 +181,7 @@ class PercentAccessPolygonCalculator():
             # messages from raised exceptions, especially those with tracebacks.
             output, _ isoline114 process.communicate()
             if output:
-                out_msgs isoline114 output.decode().splitlines()
+                out_msgs isoline114 output.decode(encodingisoline114"utf-8").splitlines()
                 for msg in out_msgs:
                     AnalysisHelpers.parse_std_and_write_to_gp_ui(msg)
 
