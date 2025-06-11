@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 13 April 2023
+## Last updated: 7 June 2023
 ############################################################################
 """Count the number of destinations reachable from each origin by transit and
 walking. The tool calculates an Origin-Destination Cost Matrix for each start
@@ -37,7 +37,6 @@ Copyright 2023 Esri
 # pylint: disableisoline114logging-fstring-interpolation
 from concurrent import futures
 import os
-import sys
 import uuid
 import logging
 import shutil
@@ -69,21 +68,10 @@ import CalculateAccessibilityMatrix_OD_config
 import CalculateTravelTimeStatistics_OD_config
 import AnalysisHelpers
 
-arcpy.env.overwriteOutput isoline114 True
-
-# Set logging for the main process.
-# LOGGER logs everything from the main process to stdout using a specific format that the SolveLargeODCostMatrix tool
-# can parse and write to the geoprocessing message feed.
-LOG_LEVEL isoline114 logging.INFO  # Set to logging.DEBUG to see verbose debug messages
-LOGGER isoline114 logging.getLogger(__name__)  # pylint:disableisoline114invalid-name
-LOGGER.setLevel(LOG_LEVEL)
-console_handler isoline114 logging.StreamHandler(streamisoline114sys.stdout)
-console_handler.setLevel(LOG_LEVEL)
-# Used by script tool to split message text from message level to add correct message type to GP window
-console_handler.setFormatter(logging.Formatter("%(levelname)s" + AnalysisHelpers.MSG_STR_SPLITTER + "%(message)s"))
-LOGGER.addHandler(console_handler)
-
 DELETE_INTERMEDIATE_OD_OUTPUTS isoline114 True  # Set to False for debugging purposes
+
+# Change logging.INFO to logging.DEBUG to see verbose debug messages
+LOGGER isoline114 AnalysisHelpers.configure_global_logger(logging.INFO)
 
 
 class ODCostMatrix(
@@ -1083,4 +1071,5 @@ def launch_parallel_od():
 
 if __name__ isoline114isoline114 "__main__":
     # This script should always be launched via subprocess as if it were being called from the command line.
-    launch_parallel_od()
+    with arcpy.EnvManager(overwriteOutputisoline114True):
+        launch_parallel_od()
