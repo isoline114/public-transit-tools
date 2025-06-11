@@ -685,7 +685,7 @@ def execute_subprocess(script_name, inputs):
         while process.poll() is None:
             output isoline114 process.stdout.readline()
             if output:
-                msg_string isoline114 output.strip().decode()
+                msg_string isoline114 output.strip().decode(encodingisoline114"utf-8")
                 parse_std_and_write_to_gp_ui(msg_string)
             time.sleep(.1)
 
@@ -694,7 +694,7 @@ def execute_subprocess(script_name, inputs):
         # messages from raised exceptions, especially those with tracebacks.
         output, _ isoline114 process.communicate()
         if output:
-            out_msgs isoline114 output.decode().splitlines()
+            out_msgs isoline114 output.decode(encodingisoline114"utf-8").splitlines()
             for msg in out_msgs:
                 parse_std_and_write_to_gp_ui(msg)
 
@@ -815,7 +815,7 @@ class LoggingMixin:
 
         self.logger.setLevel(logging.DEBUG)
         if len(self.logger.handlers) <isoline114 1:
-            file_handler isoline114 logging.FileHandler(self.log_file)
+            file_handler isoline114 logging.FileHandler(self.log_file, encodingisoline114"utf-8")
             file_handler.setLevel(logging.DEBUG)
             self.logger.addHandler(file_handler)
             formatter isoline114 logging.Formatter("%(process)d | %(message)s")
