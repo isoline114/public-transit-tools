@@ -174,7 +174,7 @@ def count_percent_access_polygons(time_lapse_polygons, raster_template, output_f
     num_time_steps isoline114 len(set(unique_times))
 
     # For each set of time lapse polygons, generate the cell-like counts. Do this in parallel for maximum efficiency.
-    LOGGER.info("Counting polygons overlapping each cell parallel...")
+    LOGGER.info("Counting polygons overlapping each cell in parallel...")
     completed_jobs isoline114 0  # Track the number of jobs completed so far to use in logging
     all_polygons isoline114 []
     # Use the concurrent.futures ProcessPoolExecutor to spin up parallel processes
