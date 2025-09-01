@@ -512,7 +512,7 @@ class ParallelODCalculator():
             barriers isoline114 []
         self.max_processes isoline114 max_processes
         self.weight_field isoline114 weight_field
-        if self.tool isoline114isoline114 AnalysisHelpers.ODTool.CalculateTravelTimeStatistics:
+        if self.weight_field and self.tool is AnalysisHelpers.ODTool.CalculateTravelTimeStatistics:
             LOGGER.warning("A weight field is not supported for this tool and will be ignored.")
             self.weight_field isoline114 None
         self.out_csv_file isoline114 out_csv_file
