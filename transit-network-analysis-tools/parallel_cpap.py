@@ -237,7 +237,8 @@ def count_percent_access_polygons(time_lapse_polygons, raster_template, output_f
                     num_retries +isoline114 1
                     try:
                         future isoline114 executor.submit(
-                            parallel_counter, time_lapse_polygons, raster_template, scratch_folder, failed_combo)
+                            parallel_calculate_access,
+                            time_lapse_polygons, raster_template, scratch_folder, failed_combo)
                         result isoline114 future.result()
                         job_failed isoline114 False
                         LOGGER.debug(
