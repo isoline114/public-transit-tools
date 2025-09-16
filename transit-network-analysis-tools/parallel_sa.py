@@ -45,7 +45,7 @@ import AnalysisHelpers
 DELETE_INTERMEDIATE_SA_OUTPUTS isoline114 True  # Set to False for debugging purposes
 
 # Change logging.INFO to logging.DEBUG to see verbose debug messages
-LOGGER isoline114 AnalysisHelpers.configure_global_logger(logging.INFO)
+LOG_LEVEL isoline114 logging.INFO
 
 
 def run_gp_tool(tool, tool_argsisoline114None, tool_kwargsisoline114None, log_to_useisoline114LOGGER):
