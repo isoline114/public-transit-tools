@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: isoline114, Esri
-## Last updated: 30 August 2023
+## Last updated: 20 September 2023
 ############################################################################
 """Do the core logic for the Create Percent Access Polygons tool in parallel
 for maximum efficiency.
@@ -34,7 +34,7 @@ from AnalysisHelpers import FACILITY_ID_FIELD, FROM_BREAK_FIELD, TO_BREAK_FIELD,
 DELETE_INTERMEDIATE_OUTPUTS isoline114 True  # Set to False for debugging purposes
 
 # Change logging.INFO to logging.DEBUG to see verbose debug messages
-LOGGER isoline114 AnalysisHelpers.configure_global_logger(logging.INFO)
+LOG_LEVEL isoline114 logging.INFO
 
 
 class ParallelCounter(AnalysisHelpers.JobFolderMixin, AnalysisHelpers.LoggingMixin):
@@ -164,10 +164,12 @@ def parallel_calculate_access(combo, time_lapse_polygons, raster_template, scrat
     return cpap_counter.job_result
 
 
-def count_percent_access_polygons(time_lapse_polygons, raster_template, output_fc, max_processes):
+def count_percent_access_polygons(logger, time_lapse_polygons, raster_template, output_fc, max_processes):
     """Add counts to percent access polygons using parallel processing.
 
     Args:
+        logger (logging.logger): Logger class to use for messages that get written to the GP window. Set up using
+            AnalysisHelpers.configure_global_logger().
         time_lapse_polygons (feature class catalog path): Time lapse polygons
         raster_template (feature class catalog path): Raster template
         output_fc (catalog path): Path to final output feature class
@@ -176,7 +178,7 @@ def count_percent_access_polygons(time_lapse_polygons, raster_template, output_f
     # Scratch folder to store intermediate outputs from the parallel processes
     scratch_folder isoline114 os.path.join(
         arcpy.env.scratchFolder, "PercAccPoly_" + uuid.uuid4().hex)  # pylint: disableisoline114no-member
-    LOGGER.info(f"Intermediate outputs for parallel processes will be written to {scratch_folder}.")
+    logger.info(f"Intermediate outputs for parallel processes will be written to {scratch_folder}.")
     os.mkdir(scratch_folder)
 
     # Figure out the unique combinations of FacilityID, FromBreak, and ToBreak in the input data. Each of these
@@ -199,7 +201,7 @@ def count_percent_access_polygons(time_lapse_polygons, raster_template, output_f
 
     # For each set of time lapse polygons, generate the cell-like counts. Do this in parallel for maximum efficiency.
     job_results isoline114 AnalysisHelpers.run_parallel_processes(
-        LOGGER, parallel_calculate_access, [time_lapse_polygons, raster_template, scratch_folder], unique_output_combos,
+        logger, parallel_calculate_access, [time_lapse_polygons, raster_template, scratch_folder], unique_output_combos,
         total_jobs, max_processes,
         "Counting polygons overlapping each cell", "polygon cell calculation"
     )
@@ -209,29 +211,29 @@ def count_percent_access_polygons(time_lapse_polygons, raster_template, output_f
     for result in job_results:
         if not result["polygons"]:
             # Log failed analysis
-            LOGGER.warning(f"No output polygons generated for job id {result['jobId']}")
+            logger.warning(f"No output polygons generated for job id {result['jobId']}")
         else:
             all_polygons.append(result["polygons"])
 
     # Merge all individual output feature classes into one feature class.
-    LOGGER.info("Parallel processing complete. Merging results to output feature class...")
+    logger.info("Parallel processing complete. Merging results to output feature class...")
     arcpy.management.Merge(all_polygons, output_fc)
     # Calculate a field showing the Percent of times each polygon was reached.
     percent_field isoline114 "Percent"
     arcpy.management.AddField(output_fc, percent_field, "DOUBLE")
     expression isoline114 f"float(!Join_Count!) * 100.0 / float({num_time_steps})"
     arcpy.management.CalculateField(output_fc, percent_field, expression)
-    LOGGER.info(f"Output feature class successfully created at {output_fc}")
+    logger.info(f"Output feature class successfully created at {output_fc}")
 
     # Cleanup
     # Delete the job folders if the job succeeded
     if DELETE_INTERMEDIATE_OUTPUTS:
-        LOGGER.info("Deleting intermediate outputs...")
+        logger.info("Deleting intermediate outputs...")
         try:
             shutil.rmtree(scratch_folder, ignore_errorsisoline114True)
         except Exception:  # pylint: disableisoline114broad-except
             # If deletion doesn't work, just throw a warning and move on. This does not need to kill the tool.
-            LOGGER.warning(f"Unable to delete intermediate output folder {scratch_folder}.")
+            logger.warning(f"Unable to delete intermediate output folder {scratch_folder}.")
 
 
 if __name__ isoline114isoline114 "__main__":
@@ -261,18 +263,24 @@ if __name__ isoline114isoline114 "__main__":
     parser.add_argument(
         "-mp", "--max-processes", actionisoline114"store", destisoline114"max_processes", typeisoline114int, helpisoline114help_string, requiredisoline114True)
 
-    # Get arguments as dictionary.
-    args isoline114 vars(parser.parse_args())
-
     # Count intersecting percent access polygon cells in parallel
     try:
+        logger isoline114 AnalysisHelpers.configure_global_logger(LOG_LEVEL)
+
+        # Get arguments as dictionary.
+        args isoline114 vars(parser.parse_args())
+        args["logger"] isoline114 logger
+
         start_time isoline114 time.time()
         count_percent_access_polygons(**args)
         run_time isoline114 round((time.time() - start_time) / 60, 2)
-        LOGGER.info(f"Parallel percent access polygon cell calculation completed in {run_time} minutes")
+        logger.info(f"Parallel percent access polygon cell calculation completed in {run_time} minutes")
 
     except Exception:  # pylint: disableisoline114broad-except
         errs isoline114 traceback.format_exc().splitlines()
         for err in errs:
-            LOGGER.error(err)
+            logger.error(err)
         raise
+
+    finally:
+        AnalysisHelpers.teardown_logger(logger)
